@@ -19,24 +19,28 @@ credit-risk-classifier/
 │   ├── reference/                 # Partições limpas em Parquet (treino e teste)
 │   └── production/                # Partições simuladas de produção (drift)
 ├── docs/
-│   └── adr/                       # Registros de Decisões Arquiteturais (ADRs)
-│       └── 0001-use-configurable-dataset-subset.md
+│   ├── adr/                       # Registros de Decisões Arquiteturais (ADRs)
+│   │   └── 0001-use-configurable-dataset-subset.md
+│   └── model_card.md              # Model Card comparativo e especificação do modelo vencedor
 ├── models/                        # Artefatos serializados do modelo (.joblib)
 ├── reports/                       # Relatórios estatísticos de drift (HTML do Evidently AI)
 ├── scripts/
-│   └── download_data.py           # Ingestão, amostragem e particionamento dos dados
+│   ├── download_data.py           # Ingestão, amostragem e particionamento dos dados
+│   └── train.py                   # Treinamento e avaliação do modelo baseline
 ├── src/
 │   └── credit_risk/               # Pacote Python principal
 │       ├── __init__.py
 │       ├── config.py              # Configurações dinâmicas via Pydantic Settings
-│       └── data.py                # Download com streaming, amostragem e Parquet
+│       ├── data.py                # Download com streaming, amostragem e Parquet
+│       └── model.py               # Pipeline Scikit-Learn (Regressão Logística) e métricas
 ├── tests/
 │   ├── __init__.py
 │   ├── test_smoke.py              # Teste inicial de ambiente e versão
-│   └── test_data.py               # Testes de carga, amostragem e particionamento
+│   ├── test_data.py               # Testes de carga, amostragem e particionamento
+│   └── test_model.py              # Testes de treino, avaliação e persistência joblib
 ├── .gitignore
 ├── .python-version                # 3.12
-├── Makefile                       # Automação de tarefas (install, lint, test, download)
+├── Makefile                       # Automação de tarefas (install, lint, test, download, train)
 ├── pyproject.toml                 # Configurações de empacotamento, Ruff e Pytest
 └── README.md
 ```
@@ -77,7 +81,18 @@ Os arquivos serão organizados em:
 * `data/reference/reference_train.parquet`: partição de treino limpa (~16k registros).
 * `data/reference/reference_test.parquet`: partição de teste limpa (~4k registros).
 
-### 3. Validação do Código (Lint e Testes)
+### 3. Treinamento do Modelo Baseline
+Para treinar o pipeline de classificação (configurável em `src/credit_risk/config.py` entre `hist_gradient_boosting` e `logistic_regression`, ambos com `class_weight="balanced"`, `SimpleImputer`, `StandardScaler` e `OneHotEncoder`), avaliar as métricas de crédito (`ROC-AUC`, `Recall`, `Precision`, `F1`, `Accuracy`) e salvar o artefato em `models/baseline_model.joblib`:
+
+```bash
+# Via Makefile (usa o model_type configurado em Settings)
+make train
+
+# Ou diretamente via uv especificando o algoritmo
+uv run python scripts/train.py --model-type hist_gradient_boosting
+```
+
+### 4. Validação do Código (Lint e Testes)
 ```bash
 # Executar verificação de formatação e lint com Ruff
 make lint
@@ -88,7 +103,9 @@ make test
 
 ---
 
-## Decisões Arquiteturais (ADRs)
+## Decisões Arquiteturais e Documentação do Modelo
+
+* **[Model Card](docs/model_card.md)** — Comparativo de desempenho (`LogisticRegression` vs `HistGradientBoostingClassifier`), hiperparâmetros do modelo vencedor, escopo de uso e limitações.
 
 Decisões de engenharia e modelagem são documentadas na pasta [`docs/adr/`](docs/adr/):
 

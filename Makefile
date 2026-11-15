@@ -2,7 +2,7 @@ UV ?= uv
 RUN := $(UV) run
 LINT_TARGETS := src tests scripts
 
-.PHONY: help install lock lint format test download clean
+.PHONY: help install lock lint format test download train clean
 
 help:
 	@echo "Comandos disponiveis:"
@@ -12,6 +12,7 @@ help:
 	@echo "  make format    - formata e corrige problemas simples com ruff"
 	@echo "  make test      - executa os testes com pytest e cobertura"
 	@echo "  make download  - baixa e prepara o dataset de referencia em Parquet"
+	@echo "  make train     - treina o modelo baseline de Regressao Logistica"
 	@echo "  make clean     - remove caches locais e artefatos temporarios"
 
 install:
@@ -33,6 +34,9 @@ test:
 
 download:
 	$(RUN) python scripts/download_data.py
+
+train:
+	$(RUN) python scripts/train.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
