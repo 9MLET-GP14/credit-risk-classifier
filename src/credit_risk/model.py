@@ -13,6 +13,8 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from credit_risk.contracts import validate_data
+
 ModelType = Literal["logistic_regression", "hist_gradient_boosting"]
 
 
@@ -180,11 +182,12 @@ def predict_credit_risk(
     pipeline: Pipeline | None = None,
     id_column: str = "SK_ID_CURR",
     target_column: str = "TARGET",
+    validate_contract: bool = True,
 ) -> pd.DataFrame:
     """Executa inferência em lote gerando classe predita e score de risco.
 
-    Remove automaticamente colunas de identificação e alvo antes de passar ao modelo,
-    retornando um DataFrame pronto para consumo e análise de drift.
+    Valida o contrato de dados de entrada antes de acionar o modelo e remove
+    automaticamente colunas de identificação e alvo.
 
     Args:
         df: DataFrame com os dados de entrada (com ou sem coluna alvo).
@@ -192,10 +195,14 @@ def predict_credit_risk(
         pipeline: Pipeline já carregado em memória (opcional).
         id_column: Nome da coluna de identificação do cliente.
         target_column: Nome da coluna alvo (removida para evitar vazamento).
+        validate_contract: Se True, aplica o contrato Pandera antes da predição.
 
     Returns:
         DataFrame com as features de entrada acrescidas de TARGET_PRED e RISK_SCORE.
     """
+    if validate_contract:
+        df = validate_data(df, is_training=False)
+
     if pipeline is None:
         if model_path is None or not model_path.exists():
             raise FileNotFoundError(

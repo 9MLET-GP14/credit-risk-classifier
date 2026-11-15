@@ -27,21 +27,24 @@ credit-risk-classifier/
 ├── scripts/
 │   ├── download_data.py           # Ingestão, amostragem e particionamento dos dados
 │   ├── predict.py                 # Inferência em lote com geração de score de risco
-│   └── train.py                   # Treinamento e avaliação do modelo baseline
+│   ├── train.py                   # Treinamento e avaliação do modelo baseline
+│   └── validate_contracts.py      # Demonstração do contrato Pandera (válido vs. corrompido)
 ├── src/
 │   └── credit_risk/               # Pacote Python principal
 │       ├── __init__.py
 │       ├── config.py              # Configurações dinâmicas via Pydantic Settings
+│       ├── contracts.py           # Contratos de dados estritos com Pandera
 │       ├── data.py                # Download com streaming, amostragem e Parquet
 │       └── model.py               # Pipeline Scikit-Learn (treino, avaliação e inferência)
 ├── tests/
 │   ├── __init__.py
 │   ├── test_smoke.py              # Teste inicial de ambiente e versão
+│   ├── test_contracts.py          # Testes dos contratos Pandera e bloqueio de anomalias
 │   ├── test_data.py               # Testes de carga, amostragem e particionamento
 │   └── test_model.py              # Testes de treino, avaliação, inferência e joblib
 ├── .gitignore
 ├── .python-version                # 3.12
-├── Makefile                       # Automação de tarefas (install, lint, test, download, train, predict)
+├── Makefile                       # Automação (install, lint, test, download, validate, train, predict)
 ├── pyproject.toml                 # Configurações de empacotamento, Ruff e Pytest
 └── README.md
 ```
@@ -82,7 +85,22 @@ Os arquivos serão organizados em:
 * `data/reference/reference_train.parquet`: partição de treino limpa (~16k registros).
 * `data/reference/reference_test.parquet`: partição de teste limpa (~4k registros).
 
-### 3. Treinamento do Modelo Baseline
+### 3. Validação de Contratos de Dados (Pandera)
+Os pipelines de treino (`scripts/train.py`) e inferência (`scripts/predict.py`) aplicam automaticamente o contrato estrito do **Pandera** (`CreditFeaturesContract` / `CreditTrainingContract`) barrando idade < 18, rendas/créditos nulos ou negativos, IDs duplicados e categorias inválidas.
+
+Para validar as partições limpas de referência:
+```bash
+# Validação das partições íntegras (esperado: APROVADO)
+make validate
+```
+
+Para demonstrar a barreira de segurança interceptando um lote intencionalmente corrompido (exigência da Etapa 1 do Tech Challenge):
+```bash
+# Simulação com anomalias propositais (esperado: BLOQUEADO COM SUCESSO)
+make validate-corrupted
+```
+
+### 4. Treinamento do Modelo Baseline
 Para treinar o pipeline de classificação (configurável em `src/credit_risk/config.py` entre `hist_gradient_boosting` e `logistic_regression`, ambos com `class_weight="balanced"`, `SimpleImputer`, `StandardScaler` e `OneHotEncoder`), avaliar as métricas de crédito (`ROC-AUC`, `Recall`, `Precision`, `F1`, `Accuracy`) e salvar o artefato em `models/baseline_model.joblib`:
 
 ```bash
@@ -93,7 +111,7 @@ make train
 uv run python scripts/train.py --model-type hist_gradient_boosting
 ```
 
-### 4. Inferência em Lote
+### 5. Inferência em Lote
 Para gerar predições (`TARGET_PRED`) e scores de risco de inadimplência (`RISK_SCORE`) em lote (por padrão utilizando `data/reference/reference_test.parquet` sem vazamento de `TARGET`):
 
 ```bash
@@ -104,7 +122,7 @@ make predict
 uv run python scripts/predict.py --input-path data/reference/reference_test.parquet --output-path data/production/predictions.parquet
 ```
 
-### 5. Validação do Código (Lint e Testes)
+### 6. Validação do Código (Lint e Testes)
 ```bash
 # Executar verificação de formatação e lint com Ruff
 make lint

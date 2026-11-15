@@ -42,4 +42,8 @@ select = ["E", "F", "I", "W", "B", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --cov=src/credit_risk --cov-report=term-missing"
+filterwarnings = [
+    "ignore:Could not find the number of physical cores:UserWarning",
+    "ignore:Unknown solver options.*iprint",
+]
 

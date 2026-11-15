@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pandera.pandas as pa
 import pytest
 
 from credit_risk.model import (
@@ -111,5 +112,20 @@ def test_predict_credit_risk_generates_scores_and_ignores_target(tmp_path: Path)
 def test_predict_credit_risk_raises_when_model_missing(tmp_path: Path) -> None:
     """Deve levantar FileNotFoundError claro caso o artefato não exista."""
     X, _ = _create_synthetic_credit_data(n_rows=10)
+    X["SK_ID_CURR"] = range(1, 11)
     with pytest.raises(FileNotFoundError, match="Artefato do modelo não encontrado"):
         predict_credit_risk(df=X, model_path=tmp_path / "missing.joblib")
+
+
+def test_predict_credit_risk_blocks_corrupted_data(tmp_path: Path) -> None:
+    """Garante que a inferência bloqueia dados inválidos pelo contrato antes de rodar o modelo."""
+    X, y = _create_synthetic_credit_data(n_rows=30)
+    pipeline = train_baseline_model(X, y, random_state=42)
+    artifact_path = save_model_artifact(pipeline, tmp_path / "model.joblib")
+
+    corrupted_df = X.iloc[:5].copy()
+    corrupted_df["SK_ID_CURR"] = range(1, 6)
+    corrupted_df.loc[0, "AGE_YEARS"] = 12  # viola idade >= 18
+
+    with pytest.raises(pa.errors.SchemaErrors):
+        predict_credit_risk(df=corrupted_df, model_path=artifact_path)
