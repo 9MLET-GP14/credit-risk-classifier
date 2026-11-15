@@ -1,0 +1,42 @@
+# Contexto e assistência de IA
+context/
+
+# Ambientes virtuais e Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Caches de ferramentas
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Dados gerados e artefatos locais
+data/raw/*
+!data/raw/.gitkeep
+data/reference/*
+!data/reference/.gitkeep
+data/production/*
+!data/production/.gitkeep
+
+models/*
+!models/.gitkeep
+
+reports/*
+!reports/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Ambiente e SO
+.env
+.DS_Store
+Thumbs.db
+
