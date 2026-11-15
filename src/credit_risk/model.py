@@ -172,3 +172,41 @@ def load_model_artifact(path: Path) -> Pipeline:
         Pipeline Scikit-Learn carregado.
     """
     return joblib.load(path)
+
+
+def predict_credit_risk(
+    df: pd.DataFrame,
+    model_path: Path | None = None,
+    pipeline: Pipeline | None = None,
+    id_column: str = "SK_ID_CURR",
+    target_column: str = "TARGET",
+) -> pd.DataFrame:
+    """Executa inferência em lote gerando classe predita e score de risco.
+
+    Remove automaticamente colunas de identificação e alvo antes de passar ao modelo,
+    retornando um DataFrame pronto para consumo e análise de drift.
+
+    Args:
+        df: DataFrame com os dados de entrada (com ou sem coluna alvo).
+        model_path: Caminho do modelo serializado (.joblib). Obrigatório se pipeline for None.
+        pipeline: Pipeline já carregado em memória (opcional).
+        id_column: Nome da coluna de identificação do cliente.
+        target_column: Nome da coluna alvo (removida para evitar vazamento).
+
+    Returns:
+        DataFrame com as features de entrada acrescidas de TARGET_PRED e RISK_SCORE.
+    """
+    if pipeline is None:
+        if model_path is None or not model_path.exists():
+            raise FileNotFoundError(
+                f"Artefato do modelo não encontrado em: {model_path}. "
+                "Execute o treinamento antes de realizar inferência."
+            )
+        pipeline = load_model_artifact(model_path)
+
+    result_df = df.drop(columns=[target_column], errors="ignore").copy()
+    feature_df = result_df.drop(columns=[id_column], errors="ignore")
+
+    result_df["TARGET_PRED"] = pipeline.predict(feature_df).astype(int)
+    result_df["RISK_SCORE"] = pipeline.predict_proba(feature_df)[:, 1].round(6)
+    return result_df

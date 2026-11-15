@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     reference_train_filename: str = "reference_train.parquet"
     reference_test_filename: str = "reference_test.parquet"
     baseline_model_filename: str = "baseline_model.joblib"
+    predictions_filename: str = "predictions.parquet"
 
     # Parâmetros de amostragem, seleção de colunas e modelo
     sample_size: int | None = 20_000
@@ -84,6 +85,11 @@ class Settings(BaseSettings):
     def baseline_model_path(self) -> Path:
         """Caminho completo do artefato do modelo baseline."""
         return self.models_dir / self.baseline_model_filename
+
+    @property
+    def predictions_path(self) -> Path:
+        """Caminho completo do arquivo de predições em lote."""
+        return self.production_dir / self.predictions_filename
 
 
 settings = Settings()

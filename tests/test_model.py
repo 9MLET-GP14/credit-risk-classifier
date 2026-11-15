@@ -10,6 +10,7 @@ from credit_risk.model import (
     ModelType,
     evaluate_model,
     load_model_artifact,
+    predict_credit_risk,
     save_model_artifact,
     train_baseline_model,
 )
@@ -85,3 +86,30 @@ def test_save_and_load_model_artifact_preserves_predictions(tmp_path: Path) -> N
         pipeline.predict_proba(X),
         loaded_pipeline.predict_proba(X),
     )
+
+
+def test_predict_credit_risk_generates_scores_and_ignores_target(tmp_path: Path) -> None:
+    """Valida que predict_credit_risk remove TARGET, preserva ID e gera RISK_SCORE válido."""
+    X, y = _create_synthetic_credit_data(n_rows=60)
+    pipeline = train_baseline_model(X, y, random_state=42)
+    artifact_path = save_model_artifact(pipeline, tmp_path / "model.joblib")
+
+    input_df = X.copy()
+    input_df["SK_ID_CURR"] = range(1000, 1060)
+    input_df["TARGET"] = y
+
+    preds_df = predict_credit_risk(df=input_df, model_path=artifact_path)
+
+    assert "TARGET" not in preds_df.columns
+    assert "SK_ID_CURR" in preds_df.columns
+    assert "TARGET_PRED" in preds_df.columns
+    assert "RISK_SCORE" in preds_df.columns
+    assert set(preds_df["TARGET_PRED"].unique()).issubset({0, 1})
+    assert ((preds_df["RISK_SCORE"] >= 0.0) & (preds_df["RISK_SCORE"] <= 1.0)).all()
+
+
+def test_predict_credit_risk_raises_when_model_missing(tmp_path: Path) -> None:
+    """Deve levantar FileNotFoundError claro caso o artefato não exista."""
+    X, _ = _create_synthetic_credit_data(n_rows=10)
+    with pytest.raises(FileNotFoundError, match="Artefato do modelo não encontrado"):
+        predict_credit_risk(df=X, model_path=tmp_path / "missing.joblib")

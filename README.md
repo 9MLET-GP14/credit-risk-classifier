@@ -26,21 +26,22 @@ credit-risk-classifier/
 ├── reports/                       # Relatórios estatísticos de drift (HTML do Evidently AI)
 ├── scripts/
 │   ├── download_data.py           # Ingestão, amostragem e particionamento dos dados
+│   ├── predict.py                 # Inferência em lote com geração de score de risco
 │   └── train.py                   # Treinamento e avaliação do modelo baseline
 ├── src/
 │   └── credit_risk/               # Pacote Python principal
 │       ├── __init__.py
 │       ├── config.py              # Configurações dinâmicas via Pydantic Settings
 │       ├── data.py                # Download com streaming, amostragem e Parquet
-│       └── model.py               # Pipeline Scikit-Learn (Regressão Logística) e métricas
+│       └── model.py               # Pipeline Scikit-Learn (treino, avaliação e inferência)
 ├── tests/
 │   ├── __init__.py
 │   ├── test_smoke.py              # Teste inicial de ambiente e versão
 │   ├── test_data.py               # Testes de carga, amostragem e particionamento
-│   └── test_model.py              # Testes de treino, avaliação e persistência joblib
+│   └── test_model.py              # Testes de treino, avaliação, inferência e joblib
 ├── .gitignore
 ├── .python-version                # 3.12
-├── Makefile                       # Automação de tarefas (install, lint, test, download, train)
+├── Makefile                       # Automação de tarefas (install, lint, test, download, train, predict)
 ├── pyproject.toml                 # Configurações de empacotamento, Ruff e Pytest
 └── README.md
 ```
@@ -92,7 +93,18 @@ make train
 uv run python scripts/train.py --model-type hist_gradient_boosting
 ```
 
-### 4. Validação do Código (Lint e Testes)
+### 4. Inferência em Lote
+Para gerar predições (`TARGET_PRED`) e scores de risco de inadimplência (`RISK_SCORE`) em lote (por padrão utilizando `data/reference/reference_test.parquet` sem vazamento de `TARGET`):
+
+```bash
+# Via Makefile
+make predict
+
+# Ou via CLI apontando um arquivo customizado (.parquet ou .csv)
+uv run python scripts/predict.py --input-path data/reference/reference_test.parquet --output-path data/production/predictions.parquet
+```
+
+### 5. Validação do Código (Lint e Testes)
 ```bash
 # Executar verificação de formatação e lint com Ruff
 make lint
