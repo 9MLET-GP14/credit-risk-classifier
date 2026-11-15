@@ -27,6 +27,7 @@ credit-risk-classifier/
 ├── scripts/
 │   ├── download_data.py           # Ingestão, amostragem e particionamento dos dados
 │   ├── predict.py                 # Inferência em lote com geração de score de risco
+│   ├── run_drift_analysis.py      # Simulação de choque econômico e relatório de drift (Evidently AI)
 │   ├── train.py                   # Treinamento e avaliação do modelo baseline
 │   └── validate_contracts.py      # Demonstração do contrato Pandera (válido vs. corrompido)
 ├── src/
@@ -35,16 +36,18 @@ credit-risk-classifier/
 │       ├── config.py              # Configurações dinâmicas via Pydantic Settings
 │       ├── contracts.py           # Contratos de dados estritos com Pandera
 │       ├── data.py                # Download com streaming, amostragem e Parquet
+│       ├── drift.py               # Simulação de drift e geração de relatórios Evidently AI
 │       └── model.py               # Pipeline Scikit-Learn (treino, avaliação e inferência)
 ├── tests/
 │   ├── __init__.py
 │   ├── test_smoke.py              # Teste inicial de ambiente e versão
 │   ├── test_contracts.py          # Testes dos contratos Pandera e bloqueio de anomalias
 │   ├── test_data.py               # Testes de carga, amostragem e particionamento
+│   ├── test_drift.py              # Testes de simulação de drift e relatório Evidently AI
 │   └── test_model.py              # Testes de treino, avaliação, inferência e joblib
 ├── .gitignore
 ├── .python-version                # 3.12
-├── Makefile                       # Automação (install, lint, test, download, validate, train, predict)
+├── Makefile                       # Automação (install, lint, test, download, validate, train, predict, drift)
 ├── pyproject.toml                 # Configurações de empacotamento, Ruff e Pytest
 └── README.md
 ```
@@ -122,7 +125,13 @@ make predict
 uv run python scripts/predict.py --input-path data/reference/reference_test.parquet --output-path data/production/predictions.parquet
 ```
 
-### 6. Validação do Código (Lint e Testes)
+### 6. Simulação de Drift e Relatório Evidently AI
+```bash
+# Simular choque econômico em produção e gerar relatório HTML de drift (reports/drift_report.html)
+make drift
+```
+
+### 7. Validação do Código (Lint e Testes)
 ```bash
 # Executar verificação de formatação e lint com Ruff
 make lint

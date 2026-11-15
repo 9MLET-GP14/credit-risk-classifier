@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     reference_test_filename: str = "reference_test.parquet"
     baseline_model_filename: str = "baseline_model.joblib"
     predictions_filename: str = "predictions.parquet"
+    production_shock_filename: str = "production_shock.parquet"
+    drift_report_filename: str = "drift_report.html"
 
     # Parâmetros de amostragem, seleção de colunas e modelo
     sample_size: int | None = 20_000
@@ -90,6 +92,16 @@ class Settings(BaseSettings):
     def predictions_path(self) -> Path:
         """Caminho completo do arquivo de predições em lote."""
         return self.production_dir / self.predictions_filename
+
+    @property
+    def production_shock_path(self) -> Path:
+        """Caminho completo do dataset de produção com choque econômico simulado."""
+        return self.production_dir / self.production_shock_filename
+
+    @property
+    def drift_report_path(self) -> Path:
+        """Caminho completo do relatório HTML de drift gerado pelo Evidently AI."""
+        return self.reports_dir / self.drift_report_filename
 
 
 settings = Settings()

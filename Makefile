@@ -2,7 +2,7 @@ UV ?= uv
 RUN := $(UV) run
 LINT_TARGETS := src tests scripts
 
-.PHONY: help install lock lint format test download validate validate-corrupted train predict clean
+.PHONY: help install lock lint format test download validate validate-corrupted train predict drift clean
 
 help:
 	@echo "Comandos disponiveis:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make validate-corrupted - simula lote corrompido e demonstra bloqueio pelo Pandera"
 	@echo "  make train              - treina o modelo baseline configurado"
 	@echo "  make predict            - gera predicoes em lote para o conjunto de teste"
+	@echo "  make drift              - simula choque economico e gera relatorio HTML Evidently AI"
 	@echo "  make clean              - remove caches locais e artefatos temporarios"
 
 install:
@@ -49,6 +50,9 @@ train:
 
 predict:
 	$(RUN) python scripts/predict.py
+
+drift:
+	$(RUN) python scripts/run_drift_analysis.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
