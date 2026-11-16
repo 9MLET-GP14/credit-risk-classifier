@@ -168,3 +168,66 @@ make test
 Decisões de engenharia e modelagem são documentadas na pasta [`docs/adr/`](docs/adr/):
 
 * **[ADR 0001: Uso de Subconjunto Configurável do Dataset Home Credit Default Risk](docs/adr/0001-use-configurable-dataset-subset.md)** — Justifica o uso de uma fatia estratificada configurável (20.000 amostras e 9 atributos essenciais) para garantir agilidade na experimentação, redução no tempo de CI e baixo consumo de recursos de hardware sem perda de validade estatística.
+
+---
+
+## Governança, Privacy by Design e Conformidade com a LGPD
+
+A camada de sustentação do modelo foi projetada segundo os fundamentos de **Privacy by Design (PbD)**, **Privacy by Default (PbDf)** e os princípios da **Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)**, garantindo que proteção de dados e prevenção de vieses façam parte da arquitetura desde a ingestão até o monitoramento contínuo.
+
+### 1. Tratamento de PII, Minimização (*Privacy by Default*) e Dados Sintéticos
+* **Minimização na origem (Princípio da Necessidade):** Dos ~122 atributos originais do dataset *Home Credit Default Risk*, o sistema ingere por padrão apenas **9 variáveis estritamente necessárias** (`DEFAULT_COLUMNS` em [`src/credit_risk/config.py`](src/credit_risk/config.py)), descartando antes mesmo da persistência em Parquet qualquer dado pessoal sensível (origem racial/étnica, convicção religiosa, saúde, biometria) e identificadores nominais diretos.
+* **Pseudonimização técnica:** O campo `SK_ID_CURR` atua exclusivamente como chave técnica pseudonimizada para validar unicidade no contrato de entrada (Pandera), sendo **removido** antes do treinamento, da inferência (`RISK_SCORE`) e da análise estatística de *drift* (`src/credit_risk/drift.py`).
+* **Prevenção de discriminação algorítmica:** Ao excluir atributos sensíveis e aplicar validação contínua de domínios categóricos, o pipeline mitiga o risco de reprodução de vieses discriminatórios na concessão de crédito (Princípio da Não Discriminação da LGPD).
+* **Uso de dados sintéticos e simulação baseada em regras:** A simulação de choque econômico (`simulate_economic_shock`) e os lotes corrompidos de teste (`build_corrupted_batch` e suíte `tests/`) operam sobre perturbações estatísticas e regras de negócio sem expor dados pessoais reais em ambientes de validação.
+
+### 2. Mapeamento dos 7 Princípios de Privacy by Design na Arquitetura
+
+| Princípio de PbD (Ann Cavoukian) | Aplicação Concreta neste Repositório |
+| :--- | :--- |
+| **1. Proativo, não reativo; preventivo, não corretivo** | Contratos **Pandera** (`src/credit_risk/contracts.py`) bloqueiam anomalias antes da inferência; **Evidently AI** e `logs/pipeline.log` emitem alertas `WARNING`/`ERROR` antes da degradação silenciosa. |
+| **2. Privacidade como padrão (*Privacy by Default*)** | Subconjunto mínimo de 9 colunas ativado por padrão em `Settings` e exclusão automática de `SK_ID_CURR` e `TARGET` nas etapas analíticas. |
+| **3. Privacidade incorporada ao design** | Validação de schema, minimização e rastreabilidade fazem parte do fluxo obrigatório (`scripts/run_pipeline.py`), não de um controle externo opcional. |
+| **4. Funcionalidade total (soma positiva)** | A minimização e a pseudonimização preservam o poder discriminativo do modelo baseline (`HistGradientBoostingClassifier`) sem expor PII desnecessária. |
+| **5. Segurança de ponta a ponta (ciclo de vida)** | Controle explícito desde a ingestão (`data/raw/`), partições tratadas (`data/reference/`), inferência (`data/production/`) até o descarte de artefatos temporários. |
+| **6. Visibilidade e transparência** | Documentação aberta em [`docs/model_card.md`](docs/model_card.md), [`docs/observability_metrics.md`](docs/observability_metrics.md), `reports/drift_report.html` e runs auditáveis no **MLflow**. |
+| **7. Respeito pela privacidade do usuário** | Saída estruturada (`RISK_SCORE` + `TARGET_PRED`) e logs auditáveis viabilizam explicabilidade e revisão humana de decisões automatizadas. |
+
+### 3. Base Legal e Direitos dos Titulares (LGPD)
+* **Base Legal Principal — Proteção ao Crédito:** O tratamento de dados financeiros e contratuais (renda, valor do crédito, anuidade, vínculo de renda, escolaridade e faixa etária) fundamenta-se na hipótese legal de **proteção ao crédito**, que autoriza a análise de risco financeiro, a concessão responsável e o combate à inadimplência.
+* **Bases Complementares:** Quando aplicável ao fluxo de contratação pelo titular, apoia-se em **execução de contrato ou diligências preliminares** e, para monitoramento interno de qualidade e prevenção a fraudes/degradação, no **legítimo interesse do controlador** (observado o princípio da necessidade e o balanceamento com os direitos do titular).
+* **Qualidade dos Dados e *Accountability*:** Os contratos estritos do Pandera garantem exatidão, clareza e integridade na entrada, enquanto o MLflow (`mlruns/`) e os logs centralizados (`logs/pipeline.log`) mantêm trilha de auditoria para prestação de contas a reguladores.
+* **Decisões Automatizadas e Direitos dos Titulares:** A geração de `RISK_SCORE` contínuo (probabilidade calibrável) acompanhado do *Model Card* evita decisões opacas do tipo "caixa-preta", viabilizando o atendimento aos direitos de confirmação de tratamento, acesso, correção de dados inexatos, eliminação de dados excessivos e solicitação de revisão de decisões automatizadas.
+
+### 4. Ciclo de Vida, Retenção e Descarte de Dados
+
+| Ativo / Diretório | Natureza | Finalidade | Política de Retenção e Descarte |
+| :--- | :--- | :--- | :--- |
+| `data/raw/` | Dados brutos de origem | Extração inicial e amostragem estratificada | Retenção temporária apenas durante a preparação; **excluído do controle de versão** (`.gitignore`) e passível de descarte imediato após geração dos Parquets. |
+| `data/reference/` | Dados tratados e minimizados (Parquet) | Treino, validação e baseline estatístico de referência | Mantido durante o ciclo de vigência da versão do modelo; substituído/eliminado de forma segura ao expirar a janela histórica ou na troca de baseline. |
+| `data/production/` | Lotes de inferência e simulação | Escoragem em lote e comparação de *drift* | Retenção de curto prazo (apenas janela operacional de auditoria); eliminação periódica após consolidação das métricas no MLflow. |
+| `logs/pipeline.log` e `mlruns/` | Telemetria operacional e auditoria | Rastreabilidade de falhas, latência, rejeições e métricas | Retenção alinhada à política de auditoria de modelos; **não versionado no Git** e restrito a métricas agregadas/artefatos sem exposição de registros individuais em texto plano. |
+| `models/` e `reports/` | Artefatos derivados (`.joblib`, `.html`) | Inferência e relatório estatístico agregado | Contêm apenas parâmetros aprendidos e distribuições agregadas (sem PII individual); versionados por ciclo de *release* e arquivados após obsolescência. |
+
+---
+
+## Análise Causal do Drift e Plano Prescritivo de Sustentação
+
+### 1. Diagnóstico Causal do Drift Observado
+Na simulação de choque macroeconômico (`make drift` / `make pipeline-drift`), o **Evidently AI** detecta *Dataset Drift* global em **6 de 9 colunas monitoradas (66,7%)**:
+
+* **Causas econômicas e estruturais simuladas:**
+  * **Perda de poder aquisitivo (`AMT_INCOME_TOTAL`, K-S `p = 0.0`):** redução média de 25% na renda declarada, comprimindo a capacidade de pagamento da base.
+  * **Aumento de alavancagem (`AMT_CREDIT` e `AMT_ANNUITY`, K-S `p = 0.0`):** elevação média de 35% no valor financiado e de 30% na parcela anual, ampliando o comprometimento de renda.
+  * **Rejuvenescimento e mudança de perfil laboral (`AGE_YEARS` K-S `p = 0.0` e `NAME_INCOME_TYPE` PSI `= 0.5735`):** migração de 25% dos proponentes para categorias de maior vulnerabilidade econômica (*Commercial associate* / *Unemployed*).
+* **Impacto nas predições (`RISK_SCORE`, K-S `p = 0.0097`):** embora a taxa agregada de classificação binária (`TARGET_PRED`) varie pouco no corte fixo (`0.5`), a distribuição contínua das probabilidades (`RISK_SCORE`) sofre deslocamento estatisticamente significativo — sinal clássico de **degradação silenciosa** antes mesmo de os rótulos reais de inadimplência (*ground truth*) chegarem com atraso.
+
+### 2. Plano Prescritivo de Sustentação
+As ações operacionais vinculam diretamente os alertas definidos em [`docs/observability_metrics.md`](docs/observability_metrics.md) à tomada de decisão de engenharia e risco:
+
+1. **Bloqueio preventivo na ingestão (`rejection_rate > 0%`):**
+   * *Ação:* O contrato Pandera interrompe automaticamente o pipeline (`pipeline_status = 0`), grava os detalhes no log centralizado (`ERROR`) e registra a falha no MLflow, impedindo que dados nulos, negativos ou fora de domínio contaminem o score de crédito.
+2. **Alarme de *Drift* Moderado (`drift_share` entre 25% e 50%):**
+   * *Ação:* Inspecionar `reports/drift_report.html`, recalibrar o ponto de corte (*threshold*) sobre `RISK_SCORE` junto à área de política de crédito e aumentar a frequência de monitoramento dos atrasos reais de pagamento (FPD/SPD).
+3. **Gatilho de Retreinamento e Recalibração (`drift_share >= 0.50` ou `roc_auc < 0.60`):**
+   * *Ação:* Acionar *retreino programado* com janela temporal mais recente (pós-choque), comparar o novo modelo candidato no MLflow contra o baseline atual (`ROC-AUC` e `Recall`) e validar a ausência de viés antes de promover o novo artefato `.joblib` para produção.
