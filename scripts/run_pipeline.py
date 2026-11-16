@@ -76,7 +76,8 @@ def main() -> None:
     training_latency = 0.0
     drift_latency = 0.0
 
-    total_records = 0
+    # As métricas de volume e rejeição consideram somente o lote de produção.
+    production_total_records = 0
     rejected_records = 0
     rejection_rate = 0.0
     eval_metrics: dict[str, float] = {"roc_auc": 0.0, "recall": 0.0, "precision": 0.0, "f1": 0.0}
@@ -152,7 +153,6 @@ def main() -> None:
             test_df, is_training=True, logger=logger, stage_name="referência-teste"
         )
         validation_latency = round(time.perf_counter() - t0, 4)
-        total_records = len(train_df) + len(test_df)
 
         # 3. Treinamento e avaliação do modelo baseline
         t0 = time.perf_counter()
@@ -203,12 +203,14 @@ def main() -> None:
 
         # Auditoria e barreira estrita do contrato Pandera no lote de produção
         t_val_prod = time.perf_counter()
-        total_records += len(prod_df)
+        production_total_records = len(prod_df)
         prod_audit = audit_contract_health(
             prod_df, is_training=False, logger=logger, stage_name="produção-auditoria"
         )
         rejected_records = int(prod_audit["rejected_records"])
-        rejection_rate = (rejected_records / total_records) if total_records > 0 else 0.0
+        rejection_rate = (
+            rejected_records / production_total_records if production_total_records > 0 else 0.0
+        )
         validate_with_observability(
             prod_df, is_training=False, logger=logger, stage_name="produção-barreira"
         )
@@ -254,14 +256,14 @@ def main() -> None:
             "[resumo] Status=%s | Latência total=%.4fs | Registros=%d | Rejeitados=%d (%.2f%%)",
             status_label,
             total_latency,
-            total_records,
+            production_total_records,
             rejected_records,
             rejection_rate * 100,
         )
 
         health = PipelineHealthMetrics(
-            total_records_received=total_records,
-            valid_records=max(0, total_records - rejected_records),
+            total_records_received=production_total_records,
+            valid_records=max(0, production_total_records - rejected_records),
             rejected_records=rejected_records,
             rejection_rate=round(rejection_rate, 6),
             roc_auc=float(eval_metrics["roc_auc"]),
