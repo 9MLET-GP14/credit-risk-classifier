@@ -29,6 +29,7 @@ models/*
 
 reports/*
 !reports/.gitkeep
+!reports/drift_report.html
 
 # MLflow
 mlruns/

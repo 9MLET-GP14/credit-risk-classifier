@@ -21,10 +21,13 @@ credit-risk-classifier/
 ├── docs/
 │   ├── adr/                       # Registros de Decisões Arquiteturais (ADRs)
 │   │   └── 0001-use-configurable-dataset-subset.md
+│   ├── images/                    # Evidências visuais (prints do MLflow UI e logs)
 │   ├── model_card.md              # Model Card comparativo e especificação do modelo vencedor
+│   ├── observability_evidence.md  # Detalhamento e prints do tracking integrado no MLflow
 │   └── observability_metrics.md   # Métricas operacionais, SLOs e planos de ação (Runbooks)
 ├── models/                        # Artefatos serializados do modelo (.joblib)
-├── reports/                       # Relatórios estatísticos de drift (HTML do Evidently AI)
+├── reports/
+│   └── drift_report.html          # Relatório estatístico de drift gerado pelo Evidently AI
 ├── scripts/
 │   ├── download_data.py           # Ingestão, amostragem e particionamento dos dados
 │   ├── predict.py                 # Inferência em lote com geração de score de risco
@@ -164,10 +167,19 @@ make test
 
 * **[Model Card](docs/model_card.md)** — Comparativo de desempenho (`LogisticRegression` vs `HistGradientBoostingClassifier`), hiperparâmetros do modelo vencedor, escopo de uso e limitações.
 * **[Métricas de Observabilidade e Runbooks](docs/observability_metrics.md)** — Catálogo de métricas operacionais (status, latência, volume), qualidade (Pandera), drift (Evidently AI), SLOs e planos de ação.
+* **[Evidências de Observabilidade e Tracking](docs/observability_evidence.md)** — Passo a passo e capturas de tela do MLflow UI demonstrando os cenários `clean`, `drift` e `corrupted` com logs integrados.
 
 Decisões de engenharia e modelagem são documentadas na pasta [`docs/adr/`](docs/adr/):
 
 * **[ADR 0001: Uso de Subconjunto Configurável do Dataset Home Credit Default Risk](docs/adr/0001-use-configurable-dataset-subset.md)** — Justifica o uso de uma fatia estratificada configurável (20.000 amostras e 9 atributos essenciais) para garantir agilidade na experimentação, redução no tempo de CI e baixo consumo de recursos de hardware sem perda de validade estatística.
+
+---
+
+## Observabilidade e Tracking Integrado
+
+O pipeline unificado (`make pipeline`) integra em um único fluxo o **logging estruturado** (`logs/pipeline.log`), as validações do **Pandera**, os testes estatísticos do **Evidently AI** e o **MLflow Tracking**. A cada execução, um run com nome versionado por cenário e timestamp (`credit-risk-<cenário>-<timestamp>`) centraliza parâmetros, métricas de saúde/latência, o modelo `.joblib`, o relatório `drift_report.html` e o próprio log da execução como artefato.
+
+Veja o detalhamento completo e as evidências visuais dos três cenários (`clean`, `drift` e `corrupted`) no MLflow UI em **[docs/observability_evidence.md](docs/observability_evidence.md)**.
 
 ---
 
