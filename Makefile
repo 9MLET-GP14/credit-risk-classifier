@@ -1,8 +1,9 @@
 UV ?= uv
 RUN := $(UV) run
 LINT_TARGETS := src tests scripts
+SCENARIO ?= drift
 
-.PHONY: help install lock lint format test download validate validate-corrupted train predict drift clean
+.PHONY: help install lock lint format test download validate validate-corrupted train predict drift pipeline pipeline-clean pipeline-drift pipeline-corrupted mlflow-ui clean
 
 help:
 	@echo "Comandos disponiveis:"
@@ -17,6 +18,11 @@ help:
 	@echo "  make train              - treina o modelo baseline configurado"
 	@echo "  make predict            - gera predicoes em lote para o conjunto de teste"
 	@echo "  make drift              - simula choque economico e gera relatorio HTML Evidently AI"
+	@echo "  make pipeline           - executa fluxo ponta a ponta (SCENARIO=clean|drift|corrupted, padrao: drift)"
+	@echo "  make pipeline-clean     - executa pipeline sem drift (cenario estavel)"
+	@echo "  make pipeline-drift     - executa pipeline com choque economico simulado"
+	@echo "  make pipeline-corrupted - executa pipeline com lote corrompido para testar bloqueio e logs"
+	@echo "  make mlflow-ui          - inicia a interface web local do MLflow (http://127.0.0.1:5000)"
 	@echo "  make clean              - remove caches locais e artefatos temporarios"
 
 install:
@@ -53,6 +59,21 @@ predict:
 
 drift:
 	$(RUN) python scripts/run_drift_analysis.py
+
+pipeline:
+	$(RUN) python scripts/run_pipeline.py --scenario $(SCENARIO)
+
+pipeline-clean:
+	$(RUN) python scripts/run_pipeline.py --scenario clean
+
+pipeline-drift:
+	$(RUN) python scripts/run_pipeline.py --scenario drift
+
+pipeline-corrupted:
+	$(RUN) python scripts/run_pipeline.py --scenario corrupted
+
+mlflow-ui:
+	$(RUN) mlflow ui
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov

@@ -83,3 +83,22 @@ def format_contract_errors(exc: pa.errors.SchemaErrors) -> str:
     for (column, check), count in grouped.items():
         summary_lines.append(f"  - Coluna '{column}' | Regra '{check}': {count} ocorrência(s)")
     return "\n".join(summary_lines)
+
+
+def build_corrupted_batch(clean_sample: pd.DataFrame) -> pd.DataFrame:
+    """Injeta anomalias intencionais para demonstrar o bloqueio de ingestão pelo contrato."""
+    corrupted = clean_sample.drop(columns=["TARGET"], errors="ignore").copy().reset_index(drop=True)
+
+    # Regra 1 violada: menor de idade (< 18 anos)
+    corrupted.loc[0, "AGE_YEARS"] = 15
+    # Regra 2 violada: renda nula e negativa
+    corrupted.loc[1, "AMT_INCOME_TOTAL"] = None
+    corrupted.loc[2, "AMT_INCOME_TOTAL"] = -1500.0
+    # Regra 3 violada: crédito negativo
+    corrupted.loc[3, "AMT_CREDIT"] = -20000.0
+    # Regra 4 violada: ID duplicado
+    corrupted.loc[4, "SK_ID_CURR"] = corrupted.loc[0, "SK_ID_CURR"]
+    # Regra 5 violada: categoria desconhecida
+    corrupted.loc[5, "NAME_INCOME_TYPE"] = "Unknown_Category"
+
+    return corrupted

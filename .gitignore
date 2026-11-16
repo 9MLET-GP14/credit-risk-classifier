@@ -35,6 +35,9 @@ mlruns/
 mlartifacts/
 mlflow.db
 
+# Logs operacionais
+logs/
+
 # Ambiente e SO
 .env
 .DS_Store

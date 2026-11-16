@@ -21,13 +21,15 @@ credit-risk-classifier/
 ├── docs/
 │   ├── adr/                       # Registros de Decisões Arquiteturais (ADRs)
 │   │   └── 0001-use-configurable-dataset-subset.md
-│   └── model_card.md              # Model Card comparativo e especificação do modelo vencedor
+│   ├── model_card.md              # Model Card comparativo e especificação do modelo vencedor
+│   └── observability_metrics.md   # Métricas operacionais, SLOs e planos de ação (Runbooks)
 ├── models/                        # Artefatos serializados do modelo (.joblib)
 ├── reports/                       # Relatórios estatísticos de drift (HTML do Evidently AI)
 ├── scripts/
 │   ├── download_data.py           # Ingestão, amostragem e particionamento dos dados
 │   ├── predict.py                 # Inferência em lote com geração de score de risco
 │   ├── run_drift_analysis.py      # Simulação de choque econômico e relatório de drift (Evidently AI)
+│   ├── run_pipeline.py            # Orquestração ponta a ponta com tracking no MLflow
 │   ├── train.py                   # Treinamento e avaliação do modelo baseline
 │   └── validate_contracts.py      # Demonstração do contrato Pandera (válido vs. corrompido)
 ├── src/
@@ -37,17 +39,19 @@ credit-risk-classifier/
 │       ├── contracts.py           # Contratos de dados estritos com Pandera
 │       ├── data.py                # Download com streaming, amostragem e Parquet
 │       ├── drift.py               # Simulação de drift e geração de relatórios Evidently AI
-│       └── model.py               # Pipeline Scikit-Learn (treino, avaliação e inferência)
+│       ├── model.py               # Pipeline Scikit-Learn (treino, avaliação e inferência)
+│       └── observability.py       # Logging centralizado, saúde de contratos e MLflow Tracking
 ├── tests/
 │   ├── __init__.py
 │   ├── test_smoke.py              # Teste inicial de ambiente e versão
 │   ├── test_contracts.py          # Testes dos contratos Pandera e bloqueio de anomalias
 │   ├── test_data.py               # Testes de carga, amostragem e particionamento
 │   ├── test_drift.py              # Testes de simulação de drift e relatório Evidently AI
-│   └── test_model.py              # Testes de treino, avaliação, inferência e joblib
+│   ├── test_model.py              # Testes de treino, avaliação, inferência e joblib
+│   └── test_observability.py      # Testes de logging, auditoria de contratos e MLflow
 ├── .gitignore
 ├── .python-version                # 3.12
-├── Makefile                       # Automação (install, lint, test, download, validate, train, predict, drift)
+├── Makefile                       # Automação (install, lint, test, download, validate, train, predict, drift, pipeline)
 ├── pyproject.toml                 # Configurações de empacotamento, Ruff e Pytest
 └── README.md
 ```
@@ -131,7 +135,21 @@ uv run python scripts/predict.py --input-path data/reference/reference_test.parq
 make drift
 ```
 
-### 7. Validação do Código (Lint e Testes)
+### 7. Pipeline Ponta a Ponta e Observabilidade (MLflow)
+```bash
+# Executar todo o fluxo (padrão: cenário 'drift'; gera logs/pipeline.log e run no MLflow)
+make pipeline
+
+# Testar cenários específicos no pipeline e nos logs centralizados:
+make pipeline-clean       # Produção estável (sem drift, status SUCCESS)
+make pipeline-drift       # Choque econômico simulado (alertas WARNING por coluna)
+make pipeline-corrupted   # Lote corrompido (bloqueio Pandera com log ERROR e run FAILED)
+
+# Abrir a interface web do MLflow para inspecionar métricas, logs e artefatos (http://127.0.0.1:5000)
+make mlflow-ui
+```
+
+### 8. Validação do Código (Lint e Testes)
 ```bash
 # Executar verificação de formatação e lint com Ruff
 make lint
@@ -145,6 +163,7 @@ make test
 ## Decisões Arquiteturais e Documentação do Modelo
 
 * **[Model Card](docs/model_card.md)** — Comparativo de desempenho (`LogisticRegression` vs `HistGradientBoostingClassifier`), hiperparâmetros do modelo vencedor, escopo de uso e limitações.
+* **[Métricas de Observabilidade e Runbooks](docs/observability_metrics.md)** — Catálogo de métricas operacionais (status, latência, volume), qualidade (Pandera), drift (Evidently AI), SLOs e planos de ação.
 
 Decisões de engenharia e modelagem são documentadas na pasta [`docs/adr/`](docs/adr/):
 

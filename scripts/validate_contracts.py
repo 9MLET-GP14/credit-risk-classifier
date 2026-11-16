@@ -7,7 +7,7 @@ import pandas as pd
 import pandera.pandas as pa
 
 from credit_risk.config import Settings
-from credit_risk.contracts import format_contract_errors, validate_data
+from credit_risk.contracts import build_corrupted_batch, format_contract_errors, validate_data
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,25 +21,6 @@ def parse_args() -> argparse.Namespace:
         help="Injeta anomalias intencionais para demonstrar o contrato bloqueando a ingestão.",
     )
     return parser.parse_args()
-
-
-def build_corrupted_batch(clean_sample: pd.DataFrame) -> pd.DataFrame:
-    """Injeta anomalias intencionais para demonstrar o bloqueio de ingestão pelo contrato."""
-    corrupted = clean_sample.drop(columns=["TARGET"], errors="ignore").copy().reset_index(drop=True)
-
-    # Regra 1 violada: menor de idade (< 18 anos)
-    corrupted.loc[0, "AGE_YEARS"] = 15
-    # Regra 2 violada: renda nula e negativa
-    corrupted.loc[1, "AMT_INCOME_TOTAL"] = None
-    corrupted.loc[2, "AMT_INCOME_TOTAL"] = -1500.0
-    # Regra 3 violada: crédito negativo
-    corrupted.loc[3, "AMT_CREDIT"] = -20000.0
-    # Regra 4 violada: ID duplicado
-    corrupted.loc[4, "SK_ID_CURR"] = corrupted.loc[0, "SK_ID_CURR"]
-    # Regra 5 violada: categoria desconhecida
-    corrupted.loc[5, "NAME_INCOME_TYPE"] = "Unknown_Category"
-
-    return corrupted
 
 
 def main() -> None:

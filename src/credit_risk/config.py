@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     models_dir: Path = Path("models")
     reports_dir: Path = Path("reports")
+    mlruns_dir: Path = Path("mlruns")
+    logs_dir: Path = Path("logs")
 
     # Nomes de arquivos
     raw_filename: str = "application_train.csv"
@@ -43,6 +45,7 @@ class Settings(BaseSettings):
     predictions_filename: str = "predictions.parquet"
     production_shock_filename: str = "production_shock.parquet"
     drift_report_filename: str = "drift_report.html"
+    pipeline_log_filename: str = "pipeline.log"
 
     # Parâmetros de amostragem, seleção de colunas e modelo
     sample_size: int | None = 20_000
@@ -52,6 +55,10 @@ class Settings(BaseSettings):
     test_size: float = 0.2
     random_state: int = 42
     model_type: Literal["logistic_regression", "hist_gradient_boosting"] = "hist_gradient_boosting"
+
+    # Observabilidade e MLflow Tracking
+    mlflow_tracking_uri: str | None = None
+    mlflow_experiment_name: str = "credit-risk-observability"
 
     @property
     def raw_dir(self) -> Path:
@@ -102,6 +109,18 @@ class Settings(BaseSettings):
     def drift_report_path(self) -> Path:
         """Caminho completo do relatório HTML de drift gerado pelo Evidently AI."""
         return self.reports_dir / self.drift_report_filename
+
+    @property
+    def resolved_mlflow_tracking_uri(self) -> str:
+        """URI de tracking do MLflow (padrão local em file:///.../mlruns)."""
+        if self.mlflow_tracking_uri:
+            return self.mlflow_tracking_uri
+        return self.mlruns_dir.resolve().as_uri()
+
+    @property
+    def pipeline_log_path(self) -> Path:
+        """Caminho completo do arquivo de log centralizado do pipeline."""
+        return self.logs_dir / self.pipeline_log_filename
 
 
 settings = Settings()
