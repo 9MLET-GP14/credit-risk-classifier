@@ -82,5 +82,15 @@ O **`HistGradientBoostingClassifier`** foi selecionado como modelo padrão em `s
 * **Caso de uso principal:** Apoio à decisão de concessão de crédito e laboratório de validação para monitoramento contínuo de *Data Drift*, *Concept Drift* e contratos de qualidade em produção.
 * **Fora do escopo:** Concessão ou negação automática de crédito em ambiente financeiro real sem revisão de políticas de risco e sem a adição de variáveis de histórico de bureau externo (`EXT_SOURCE_*`).
 * **Limitações conhecidas:** O teto de `~0,62` de ROC-AUC decorre da escolha intencional de um subconjunto enxuto de 7 variáveis socioeconômicas básicas, priorizando agilidade e interpretabilidade para o foco de observabilidade do projeto.
-* **Mitigação de Vieses e Privacidade:** Variáveis potencialmente discriminatórias ou identificadores diretos (`SK_ID_CURR`) não são utilizados como features do modelo. O uso de dados pessoais segue os princípios de minimização e proteção ao crédito descritos na documentação de governança (LGPD).
+* **Privacidade:** Identificadores diretos (`SK_ID_CURR`) e dados sensíveis (LGPD art. 5º, II) não são usados como features. O uso de dados pessoais segue os princípios de minimização e proteção ao crédito descritos na documentação de governança.
+* **Vieses conhecidos (auditados em `reports/fairness_report.html`):** O modelo usa `AGE_YEARS` e **não atende à regra dos quatro quintos** por faixa etária. No teste de referência, a faixa 18–25 anos tem taxa de aprovação de 30,8%, contra 84,2% na faixa 51+ (*disparate impact* = 0,365). Escolaridade (0,593) e tipo de renda (0,528) também ficam abaixo de 0,80.
+* **Experimento de mitigação (`make fairness-ablation`):** Remover a idade não elimina o viés, porque tempo de emprego e tipo de renda funcionam como *proxies*:
+
+  | Variante | ROC-AUC | DI faixa etária | DI escolaridade | DI tipo de renda |
+  | :--- | ---: | ---: | ---: | ---: |
+  | Baseline (todas as features) | 0.6224 | 0.365 | 0.593 | 0.528 |
+  | Sem `AGE_YEARS` | 0.5926 | 0.441 | 0.585 | 0.489 |
+  | Sem `AGE_YEARS` e `EMPLOYED_YEARS` | 0.6015 | 0.584 | 0.485 | 0.457 |
+
+  Conclusão: *fairness through unawareness* apenas desloca o impacto adverso entre grupos. Por isso, este modelo **não deve tomar decisões automatizadas sem revisão humana** das negações nos grupos com alerta. A promoção de uma nova versão exige *disparate impact* `>= 0,80` ou justificativa aprovada pelo comitê de risco de modelo. O plano completo está na seção de governança do README.
 
