@@ -10,6 +10,7 @@ import mlflow
 import pandas as pd
 import pandera.pandas as pa
 import psutil
+from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 
 from credit_risk.contracts import format_contract_errors, validate_data
 
@@ -318,3 +319,146 @@ def log_pipeline_run_to_mlflow(
             mlflow.log_artifact(str(log_file_path), artifact_path="logs")
 
         return run_id
+
+
+def export_metrics_to_prometheus(
+    health_metrics: PipelineHealthMetrics,
+    output_path: Path,
+    scenario: str = "drift",
+    logger: logging.Logger | None = None,
+) -> None:
+    """Exporta métricas de saúde, drift e infra em formato OpenMetrics (.prom)."""
+    registry = CollectorRegistry()
+
+    # Gauge geral de status (1=sucesso, 0=falha)
+    g_status = Gauge(
+        "credit_risk_pipeline_status",
+        "Status de execução do pipeline (1=sucesso, 0=falha)",
+        ["scenario"],
+        registry=registry,
+    )
+    g_status.labels(scenario=scenario).set(float(health_metrics.pipeline_status))
+
+    # Métricas de volumetria e qualidade (Pandera)
+    g_records_received = Gauge(
+        "credit_risk_total_records_received",
+        "Total de registros recebidos no lote de produção",
+        ["scenario"],
+        registry=registry,
+    )
+    g_records_received.labels(scenario=scenario).set(float(health_metrics.total_records_received))
+
+    g_rejected_records = Gauge(
+        "credit_risk_rejected_records",
+        "Registros rejeitados pelo contrato de dados Pandera",
+        ["scenario"],
+        registry=registry,
+    )
+    g_rejected_records.labels(scenario=scenario).set(float(health_metrics.rejected_records))
+
+    g_rejection_rate = Gauge(
+        "credit_risk_rejection_rate",
+        "Taxa de rejeição do lote pelo contrato Pandera",
+        ["scenario"],
+        registry=registry,
+    )
+    g_rejection_rate.labels(scenario=scenario).set(float(health_metrics.rejection_rate))
+
+    # Métricas de latência
+    g_latency = Gauge(
+        "credit_risk_pipeline_latency_seconds",
+        "Latência total de execução do pipeline em segundos",
+        ["scenario"],
+        registry=registry,
+    )
+    g_latency.labels(scenario=scenario).set(float(health_metrics.total_latency_seconds))
+
+    # Métricas de Drift (Evidently AI)
+    g_drift_share = Gauge(
+        "credit_risk_drift_share",
+        "Proporção de colunas com Data Drift detectado pelo Evidently AI",
+        ["scenario"],
+        registry=registry,
+    )
+    g_drift_share.labels(scenario=scenario).set(float(health_metrics.drift_share))
+
+    g_drift_cols = Gauge(
+        "credit_risk_drifted_columns_count",
+        "Quantidade de colunas com drift estatístico",
+        ["scenario"],
+        registry=registry,
+    )
+    g_drift_cols.labels(scenario=scenario).set(float(health_metrics.drifted_columns_count))
+
+    g_target_drift = Gauge(
+        "credit_risk_target_drift",
+        "Indica se houve drift na taxa de inadimplência observada (Concept Drift)",
+        ["scenario"],
+        registry=registry,
+    )
+    g_target_drift.labels(scenario=scenario).set(float(health_metrics.target_drift))
+
+    # Métricas de Modelo e Degradação
+    g_roc_auc = Gauge(
+        "credit_risk_model_roc_auc",
+        "ROC-AUC do modelo em teste de referência",
+        ["scenario"],
+        registry=registry,
+    )
+    g_roc_auc.labels(scenario=scenario).set(float(health_metrics.roc_auc))
+
+    g_prod_roc_auc = Gauge(
+        "credit_risk_production_roc_auc",
+        "ROC-AUC do modelo em produção com rótulos reais observados",
+        ["scenario"],
+        registry=registry,
+    )
+    g_prod_roc_auc.labels(scenario=scenario).set(float(health_metrics.production_roc_auc))
+
+    g_roc_auc_drop = Gauge(
+        "credit_risk_roc_auc_drop",
+        "Queda absoluta no ROC-AUC entre referência e produção",
+        ["scenario"],
+        registry=registry,
+    )
+    g_roc_auc_drop.labels(scenario=scenario).set(float(health_metrics.roc_auc_drop))
+
+    # Métricas de Governança e Fairness
+    g_fairness_alerts = Gauge(
+        "credit_risk_fairness_alerts_count",
+        "Total de alertas de viés (Disparate Impact < 0.80) disparados",
+        ["scenario"],
+        registry=registry,
+    )
+    g_fairness_alerts.labels(scenario=scenario).set(float(health_metrics.fairness_alerts_count))
+
+    g_total_alerts = Gauge(
+        "credit_risk_total_alerts_count",
+        "Total de alertas consolidados do pipeline",
+        ["scenario"],
+        registry=registry,
+    )
+    g_total_alerts.labels(scenario=scenario).set(float(health_metrics.total_alerts_count))
+
+    # Métricas de Infraestrutura
+    g_mem = Gauge(
+        "credit_risk_process_memory_mb",
+        "Uso de memória RAM pelo processo em MB",
+        ["scenario"],
+        registry=registry,
+    )
+    g_mem.labels(scenario=scenario).set(float(health_metrics.process_memory_mb))
+
+    g_cpu = Gauge(
+        "credit_risk_system_cpu_percent",
+        "Uso de CPU do host percentual",
+        ["scenario"],
+        registry=registry,
+    )
+    g_cpu.labels(scenario=scenario).set(float(health_metrics.system_cpu_percent))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_to_textfile(str(output_path), registry)
+
+    if logger is not None:
+        logger.info("Métricas exportadas para o Prometheus Textfile em '%s'.", output_path)

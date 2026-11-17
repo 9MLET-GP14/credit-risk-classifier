@@ -229,3 +229,34 @@ def test_log_concept_drift_details_flags_degradation(caplog) -> None:
         assert log_concept_drift_details(ref, {"roc_auc": 0.50, "recall": 0.35}, {}, logger)
     assert "ALERTA DE DEGRADAÇÃO" in caplog.text
     assert not log_concept_drift_details(ref, {"roc_auc": 0.61, "recall": 0.52}, {}, logger)
+
+
+def test_export_metrics_to_prometheus_writes_valid_file(tmp_path: Path) -> None:
+    """Valida a geração correta do arquivo OpenMetrics (.prom) para o Prometheus."""
+    from credit_risk.observability import export_metrics_to_prometheus
+
+    metrics_file = tmp_path / "reports" / "metrics.prom"
+    health = PipelineHealthMetrics(
+        total_records_received=100,
+        valid_records=95,
+        rejected_records=5,
+        rejection_rate=0.05,
+        roc_auc=0.62,
+        recall=0.53,
+        precision=0.45,
+        f1=0.48,
+        dataset_drift=True,
+        drifted_columns_count=3,
+        total_monitored_columns=9,
+        drift_share=0.333,
+        reference_default_rate=0.08,
+        production_default_rate=0.12,
+        pipeline_status=1,
+    )
+
+    export_metrics_to_prometheus(health, output_path=metrics_file, scenario="test")
+    assert metrics_file.exists()
+    content = metrics_file.read_text()
+    assert 'credit_risk_pipeline_status{scenario="test"} 1.0' in content
+    assert 'credit_risk_rejected_records{scenario="test"} 5.0' in content
+    assert 'credit_risk_rejection_rate{scenario="test"} 0.05' in content

@@ -79,6 +79,15 @@ pipeline-corrupted:
 mlflow-ui:
 	$(RUN) mlflow ui
 
+prometheus-metrics:
+	$(RUN) python scripts/serve_metrics.py --port 8000
+
+monitoring-up:
+	docker compose -f monitoring/docker-compose.yml up -d
+
+monitoring-down:
+	docker compose -f monitoring/docker-compose.yml down
+
 clean:
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
 	find . -type d -name __pycache__ -prune -not -path "./.venv/*" -exec rm -rf {} +

@@ -185,6 +185,13 @@ make pipeline-corrupted   # Lote corrompido (bloqueio Pandera com log ERROR e ru
 
 # Abrir a interface web do MLflow para inspecionar métricas, logs e artefatos (http://127.0.0.1:5000)
 make mlflow-ui
+
+# Expor métricas para coleta do Prometheus / Grafana em formato OpenMetrics (http://localhost:8000/metrics)
+make prometheus-metrics
+
+# Subir a stack completa de Monitoramento em Tempo Real (Prometheus + Grafana Provisionado):
+make monitoring-up     # Prometheus na porta 9090 e Grafana na porta 3000 (admin/admin)
+make monitoring-down   # Para os containers de monitoramento
 ```
 
 ### 8. Validação do Código (Lint e Testes)

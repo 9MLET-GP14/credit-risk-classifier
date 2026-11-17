@@ -34,6 +34,7 @@ from credit_risk.observability import (
     PipelineHealthMetrics,
     audit_contract_health,
     collect_infrastructure_metrics,
+    export_metrics_to_prometheus,
     get_logger,
     log_concept_drift_details,
     log_drift_details,
@@ -413,6 +414,14 @@ def main() -> None:
             tags={"status": status_label, "scenario": args.scenario},
             logger=logger,
         )
+
+        export_metrics_to_prometheus(
+            health_metrics=health,
+            output_path=settings.prometheus_metrics_path,
+            scenario=args.scenario,
+            logger=logger,
+        )
+
         logger.info("Pipeline finalizado (%s). MLflow Run ID: %s", status_label, run_id)
 
     if pipeline_status == 0:

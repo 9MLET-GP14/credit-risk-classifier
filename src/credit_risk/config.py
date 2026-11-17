@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     performance_report_filename: str = "model_performance_report.html"
     fairness_report_filename: str = "fairness_report.html"
     pipeline_log_filename: str = "pipeline.log"
+    prometheus_metrics_filename: str = "metrics.prom"
 
     # Parâmetros de amostragem, seleção de colunas e modelo
     sample_size: int | None = 20_000
@@ -138,6 +139,11 @@ class Settings(BaseSettings):
     def pipeline_log_path(self) -> Path:
         """Caminho completo do arquivo de log centralizado do pipeline."""
         return self.logs_dir / self.pipeline_log_filename
+
+    @property
+    def prometheus_metrics_path(self) -> Path:
+        """Caminho completo do arquivo OpenMetrics (.prom) para Prometheus Node Exporter."""
+        return self.reports_dir / self.prometheus_metrics_filename
 
 
 settings = Settings()
