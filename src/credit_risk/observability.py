@@ -9,6 +9,7 @@ from typing import Any
 import mlflow
 import pandas as pd
 import pandera.pandas as pa
+import psutil
 
 from credit_risk.contracts import format_contract_errors, validate_data
 
@@ -40,11 +41,103 @@ class PipelineHealthMetrics:
     validation_latency_seconds: float = 0.0
     training_latency_seconds: float = 0.0
     drift_latency_seconds: float = 0.0
+    # Concept Drift: performance em produção com rótulos reais (ground truth com atraso)
+    production_roc_auc: float = 0.0
+    production_recall: float = 0.0
+    production_precision: float = 0.0
+    production_f1: float = 0.0
+    roc_auc_drop: float = 0.0
+    reference_observed_default_rate: float = 0.0
+    production_observed_default_rate: float = 0.0
+    target_drift: bool = False
+    performance_alert: bool = False
+    # Fairness: disparate impact por atributo (referência e produção)
+    fairness_di_age_reference: float = 1.0
+    fairness_di_age_production: float = 1.0
+    fairness_di_education_production: float = 1.0
+    fairness_di_income_type_production: float = 1.0
+    fairness_alerts_count: int = 0
+    # Consolidação de alertas (drift por coluna + alvo + performance + fairness + rejeições)
+    total_alerts_count: int = 0
+    # Infraestrutura: consumo de recursos do processo e do host
+    process_memory_mb: float = 0.0
+    process_cpu_seconds: float = 0.0
+    system_cpu_percent: float = 0.0
+    system_memory_percent: float = 0.0
 
     def to_mlflow_metrics(self) -> dict[str, float]:
         """Converte todas as métricas para valores numéricos aceitos pelo MLflow."""
         raw = asdict(self)
         return {k: float(int(v) if isinstance(v, bool) else v) for k, v in raw.items()}
+
+
+def collect_infrastructure_metrics() -> dict[str, float]:
+    """Coleta métricas de estabilidade da infraestrutura (processo atual e host).
+
+    ``system_cpu_percent`` mede o uso desde a chamada anterior a ``psutil.cpu_percent``;
+    chame ``prime_cpu_monitor()`` no início do pipeline para cobrir toda a execução.
+    """
+    process = psutil.Process()
+    cpu_times = process.cpu_times()
+    return {
+        "process_memory_mb": round(process.memory_info().rss / 1024**2, 2),
+        "process_cpu_seconds": round(cpu_times.user + cpu_times.system, 3),
+        "system_cpu_percent": float(psutil.cpu_percent(interval=None)),
+        "system_memory_percent": float(psutil.virtual_memory().percent),
+    }
+
+
+def prime_cpu_monitor() -> None:
+    """Inicia a janela de medição de CPU do host usada por ``collect_infrastructure_metrics``."""
+    psutil.cpu_percent(interval=None)
+
+
+def log_concept_drift_details(
+    reference_metrics: dict[str, float],
+    production_metrics: dict[str, float],
+    target_summary: dict[str, Any],
+    logger: logging.Logger,
+    min_roc_auc: float = 0.60,
+    max_auc_drop: float = 0.05,
+) -> bool:
+    """Registra a degradação de performance em produção e retorna se há alerta."""
+    auc_drop = reference_metrics["roc_auc"] - production_metrics["roc_auc"]
+    alert = production_metrics["roc_auc"] < min_roc_auc or auc_drop > max_auc_drop
+    log_fn = logger.warning if alert else logger.info
+    log_fn(
+        "[concept] ROC-AUC referência=%.4f -> produção=%.4f (queda=%.4f) | "
+        "Recall %.4f -> %.4f | %s",
+        reference_metrics["roc_auc"],
+        production_metrics["roc_auc"],
+        auc_drop,
+        reference_metrics["recall"],
+        production_metrics["recall"],
+        "ALERTA DE DEGRADAÇÃO" if alert else "performance estável",
+    )
+    target_fn = logger.warning if target_summary.get("target_drift") else logger.info
+    target_fn(
+        "[concept] Drift do alvo real (TARGET): %s | teste=z | p=%.6f",
+        "DETECTADO" if target_summary.get("target_drift") else "não detectado",
+        float(target_summary.get("target_drift_score", 1.0)),
+    )
+    return bool(alert)
+
+
+def log_fairness_details(results: dict[str, dict[str, dict]], logger: logging.Logger) -> None:
+    """Registra no log centralizado os indicadores de viés por dataset e atributo."""
+    for dataset, by_column in results.items():
+        for column, summary in by_column.items():
+            log_fn = logger.warning if summary["alert"] else logger.info
+            log_fn(
+                "[fairness] %-10s | %-20s | disparate_impact=%.3f | gap_negação=%.3f | "
+                "menos aprovado=%s | %s",
+                dataset,
+                column,
+                summary["disparate_impact"],
+                summary["false_denial_gap"],
+                summary.get("least_approved_group", "-"),
+                "ALERTA" if summary["alert"] else "OK",
+            )
 
 
 def get_logger(
@@ -186,6 +279,7 @@ def log_pipeline_run_to_mlflow(
     model_path: Path | None = None,
     drift_report_path: Path | None = None,
     log_file_path: Path | None = None,
+    extra_report_paths: list[Path] | None = None,
     tags: dict[str, str] | None = None,
     logger: logging.Logger | None = None,
 ) -> str:
@@ -204,6 +298,10 @@ def log_pipeline_run_to_mlflow(
 
         if drift_report_path is not None and drift_report_path.exists():
             mlflow.log_artifact(str(drift_report_path), artifact_path="reports")
+
+        for extra_path in extra_report_paths or []:
+            if extra_path.exists():
+                mlflow.log_artifact(str(extra_path), artifact_path="reports")
 
         run_id = run.info.run_id
         if logger is not None:

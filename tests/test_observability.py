@@ -202,3 +202,30 @@ def test_log_drift_details_logs_warning_and_info(caplog: pytest.LogCaptureFixtur
     assert any(
         rec.levelno == logging.INFO and "EMPLOYED_YEARS" in rec.message for rec in caplog.records
     )
+
+
+def test_collect_infrastructure_metrics_returns_positive_resources() -> None:
+    from credit_risk.observability import collect_infrastructure_metrics, prime_cpu_monitor
+
+    prime_cpu_monitor()
+    infra = collect_infrastructure_metrics()
+    assert set(infra) == {
+        "process_memory_mb",
+        "process_cpu_seconds",
+        "system_cpu_percent",
+        "system_memory_percent",
+    }
+    assert infra["process_memory_mb"] > 0
+    assert 0 <= infra["system_memory_percent"] <= 100
+
+
+def test_log_concept_drift_details_flags_degradation(caplog) -> None:
+    from credit_risk.observability import get_logger, log_concept_drift_details
+
+    logger = get_logger("credit_risk.test_concept")
+    logger.propagate = True
+    ref = {"roc_auc": 0.62, "recall": 0.53}
+    with caplog.at_level(logging.WARNING, logger="credit_risk.test_concept"):
+        assert log_concept_drift_details(ref, {"roc_auc": 0.50, "recall": 0.35}, {}, logger)
+    assert "ALERTA DE DEGRADAÇÃO" in caplog.text
+    assert not log_concept_drift_details(ref, {"roc_auc": 0.61, "recall": 0.52}, {}, logger)

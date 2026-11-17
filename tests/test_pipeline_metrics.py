@@ -89,6 +89,11 @@ def pipeline_environment(
         ),
     )
     monkeypatch.setattr(pipeline_module, "log_drift_details", Mock())
+    monkeypatch.setattr(
+        pipeline_module,
+        "generate_performance_report",
+        Mock(return_value={"target_drift": False, "target_drift_score": 1.0}),
+    )
     tracking = Mock(return_value="regression-test-run")
     monkeypatch.setattr(pipeline_module, "log_pipeline_run_to_mlflow", tracking)
     return pipeline_module, settings, tracking

@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     predictions_filename: str = "predictions.parquet"
     production_shock_filename: str = "production_shock.parquet"
     drift_report_filename: str = "drift_report.html"
+    performance_report_filename: str = "model_performance_report.html"
+    fairness_report_filename: str = "fairness_report.html"
     pipeline_log_filename: str = "pipeline.log"
 
     # Parâmetros de amostragem, seleção de colunas e modelo
@@ -59,6 +61,11 @@ class Settings(BaseSettings):
     # Observabilidade e MLflow Tracking
     mlflow_tracking_uri: str | None = None
     mlflow_experiment_name: str = "credit-risk-observability"
+
+    # Thresholds de alerta de Concept Drift e auditoria de vieses
+    min_production_roc_auc: float = 0.60
+    max_roc_auc_drop: float = 0.05
+    fairness_group_columns: list[str] = ["AGE_BAND", "NAME_EDUCATION_TYPE", "NAME_INCOME_TYPE"]
 
     @property
     def raw_dir(self) -> Path:
@@ -109,6 +116,16 @@ class Settings(BaseSettings):
     def drift_report_path(self) -> Path:
         """Caminho completo do relatório HTML de drift gerado pelo Evidently AI."""
         return self.reports_dir / self.drift_report_filename
+
+    @property
+    def performance_report_path(self) -> Path:
+        """Relatório Evidently de Concept Drift (qualidade de classificação e drift do alvo)."""
+        return self.reports_dir / self.performance_report_filename
+
+    @property
+    def fairness_report_path(self) -> Path:
+        """Relatório HTML da auditoria de vieses por grupo."""
+        return self.reports_dir / self.fairness_report_filename
 
     @property
     def resolved_mlflow_tracking_uri(self) -> str:
