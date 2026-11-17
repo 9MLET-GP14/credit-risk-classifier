@@ -6,13 +6,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from evidently import ColumnMapping
-from evidently.metric_preset import DataDriftPreset, TargetDriftPreset
+from evidently.metric_preset import ClassificationPreset, DataDriftPreset, TargetDriftPreset
+from evidently.metrics import ColumnDriftMetric
 from evidently.report import Report
 
 
 def simulate_economic_shock(
     reference_df: pd.DataFrame,
     random_state: int = 42,
+    keep_target: bool = False,
 ) -> pd.DataFrame:
     """Simula degradação temporal (choque macroeconômico) preservando o contrato Pandera.
 
@@ -25,12 +27,16 @@ def simulate_economic_shock(
     Args:
         reference_df: Dataset limpo de referência (sem drift).
         random_state: Semente para reprodutibilidade.
+        keep_target: Se True, preserva a coluna TARGET (rótulos que chegam com atraso),
+            permitindo aplicar ``simulate_concept_drift`` em seguida.
 
     Returns:
-        DataFrame de produção degradado (sem coluna TARGET) pronto para inferência.
+        DataFrame de produção degradado pronto para inferência.
     """
     rng = np.random.default_rng(random_state)
-    prod_df = reference_df.drop(columns=["TARGET"], errors="ignore").copy()
+    prod_df = reference_df.copy()
+    if not keep_target:
+        prod_df = prod_df.drop(columns=["TARGET"], errors="ignore")
 
     if "AMT_INCOME_TOTAL" in prod_df.columns:
         income_factor = rng.normal(loc=0.75, scale=0.08, size=len(prod_df)).clip(min=0.35)
@@ -61,6 +67,108 @@ def simulate_economic_shock(
         prod_df.loc[shift_mask, "NAME_INCOME_TYPE"] = replacement_types
 
     return prod_df.reset_index(drop=True)
+
+
+def simulate_concept_drift(
+    production_df: pd.DataFrame,
+    target_column: str = "TARGET",
+    random_state: int = 42,
+    new_default_prob: float = 0.30,
+    relief_prob: float = 0.40,
+) -> pd.DataFrame:
+    """Simula Concept Drift alterando a relação P(TARGET | X) nos rótulos de produção.
+
+    Os rótulos representam a inadimplência real observada com atraso (ex.: FPD 30/60/90).
+    Duas mudanças estruturais pós-choque invertem padrões que o modelo aprendeu:
+
+    1. **Superendividamento da classe média formal:** perfis historicamente de baixo risco
+       (assalariados/servidores/aposentados com ensino superior ou >= 5 anos de emprego)
+       passam a inadimplir quando a parcela compromete mais de 15% da renda, efeito da
+       inflação e dos juros sobre contratos longos.
+    2. **Programas de renegociação/transferência de renda:** parte dos inadimplentes jovens
+       (< 30 anos) ou sem vínculo formal regulariza a dívida.
+
+    As features não são alteradas aqui: o drift está apenas na relação features → alvo,
+    por isso não é detectável por testes de distribuição (K-S/PSI) nas entradas.
+
+    Args:
+        production_df: Lote de produção contendo a coluna alvo.
+        target_column: Nome da coluna alvo.
+        random_state: Semente para reprodutibilidade.
+        new_default_prob: Probabilidade de um bom pagador do segmento afetado inadimplir.
+        relief_prob: Probabilidade de um inadimplente do segmento beneficiado regularizar.
+
+    Returns:
+        Cópia do lote com a coluna alvo modificada.
+    """
+    if target_column not in production_df.columns:
+        raise ValueError(f"Coluna alvo '{target_column}' ausente: Concept Drift requer rótulos.")
+
+    rng = np.random.default_rng(random_state + 1)
+    df = production_df.copy()
+    target = df[target_column].astype(int).to_numpy().copy()
+
+    payment_burden = df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]
+    stable_profile = df["NAME_INCOME_TYPE"].isin(["Working", "State servant", "Pensioner"]) & (
+        (df["NAME_EDUCATION_TYPE"] == "Higher education") | (df["EMPLOYED_YEARS"] >= 5)
+    )
+    overindebted = (stable_profile & (payment_burden > 0.15)).to_numpy()
+    relieved = (
+        (df["AGE_YEARS"] < 30) | df["NAME_INCOME_TYPE"].isin(["Unemployed", "Commercial associate"])
+    ).to_numpy()
+
+    new_defaults = overindebted & (target == 0) & (rng.random(len(df)) < new_default_prob)
+    cured = relieved & (target == 1) & (rng.random(len(df)) < relief_prob)
+    target[new_defaults] = 1
+    target[cured] = 0
+
+    df[target_column] = target
+    return df
+
+
+def generate_performance_report(
+    reference_df: pd.DataFrame,
+    production_df: pd.DataFrame,
+    report_path: Path,
+    target_column: str = "TARGET",
+    score_column: str = "RISK_SCORE",
+) -> dict[str, Any]:
+    """Gera relatório Evidently de Concept Drift: qualidade de classificação e drift do alvo.
+
+    Compara a performance do modelo (ROC-AUC, Recall, Precision, matriz de confusão) e a
+    distribuição do alvo real entre referência e produção rotulada.
+
+    Returns:
+        Resumo com o resultado do teste de drift do alvo (``target_drift``).
+    """
+    columns = [target_column, score_column]
+    ref = reference_df[columns].copy()
+    prod = production_df[columns].copy()
+    for frame in (ref, prod):
+        frame[target_column] = frame[target_column].astype(int)
+
+    column_mapping = ColumnMapping(target=target_column, prediction=score_column, pos_label=1)
+    report = Report(
+        metrics=[
+            ClassificationPreset(),
+            ColumnDriftMetric(column_name=target_column, stattest="z"),
+        ]
+    )
+    report.run(reference_data=ref, current_data=prod, column_mapping=column_mapping)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report.save_html(str(report_path))
+
+    summary: dict[str, Any] = {
+        "target_drift": False,
+        "target_drift_score": 1.0,
+        "report_path": str(report_path),
+    }
+    for metric in report.as_dict().get("metrics", []):
+        if metric.get("metric") == "ColumnDriftMetric":
+            result = metric.get("result", {})
+            summary["target_drift"] = bool(result.get("drift_detected", False))
+            summary["target_drift_score"] = round(float(result.get("drift_score", 1.0)), 6)
+    return summary
 
 
 def generate_drift_report(
