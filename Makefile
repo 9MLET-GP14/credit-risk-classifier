@@ -3,7 +3,7 @@ RUN := $(UV) run
 LINT_TARGETS := src tests scripts
 SCENARIO ?= drift
 
-.PHONY: help install lock lint format test download validate validate-corrupted train predict drift pipeline pipeline-clean pipeline-drift pipeline-corrupted mlflow-ui clean
+.PHONY: help install lock lint format test download validate validate-corrupted train predict drift fairness-ablation pipeline pipeline-clean pipeline-drift pipeline-corrupted mlflow-ui clean
 
 help:
 	@echo "Comandos disponiveis:"
@@ -17,7 +17,8 @@ help:
 	@echo "  make validate-corrupted - simula lote corrompido e demonstra bloqueio pelo Pandera"
 	@echo "  make train              - treina o modelo baseline configurado"
 	@echo "  make predict            - gera predicoes em lote para o conjunto de teste"
-	@echo "  make drift              - simula choque economico e gera relatorio HTML Evidently AI"
+	@echo "  make drift              - simula data/concept drift e gera relatorios de drift, performance e fairness"
+	@echo "  make fairness-ablation  - compara AUC e disparate impact removendo atributos ligados a idade"
 	@echo "  make pipeline           - executa fluxo ponta a ponta (SCENARIO=clean|drift|corrupted, padrao: drift)"
 	@echo "  make pipeline-clean     - executa pipeline sem drift (cenario estavel)"
 	@echo "  make pipeline-drift     - executa pipeline com choque economico simulado"
@@ -59,6 +60,9 @@ predict:
 
 drift:
 	$(RUN) python scripts/run_drift_analysis.py
+
+fairness-ablation:
+	$(RUN) python scripts/run_fairness_ablation.py
 
 pipeline:
 	$(RUN) python scripts/run_pipeline.py --scenario $(SCENARIO)

@@ -149,6 +149,28 @@ def evaluate_model(
     }
 
 
+def evaluate_predictions(
+    y_true: pd.Series,
+    y_pred: pd.Series,
+    y_score: pd.Series,
+) -> dict[str, float]:
+    """Calcula as métricas de classificação a partir de predições já geradas.
+
+    Usado para medir a performance em produção quando os rótulos reais chegam com atraso,
+    sem precisar reexecutar o modelo.
+    """
+    y_true = pd.Series(y_true).astype(int).to_numpy()
+    y_pred = pd.Series(y_pred).astype(int).to_numpy()
+    has_both_classes = len(set(y_true)) > 1
+    return {
+        "roc_auc": float(roc_auc_score(y_true, y_score)) if has_both_classes else 0.5,
+        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
+        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+    }
+
+
 def save_model_artifact(pipeline: Pipeline, path: Path) -> Path:
     """Serializa e salva o pipeline treinado em disco via joblib.
 

@@ -129,3 +129,20 @@ def test_predict_credit_risk_blocks_corrupted_data(tmp_path: Path) -> None:
 
     with pytest.raises(pa.errors.SchemaErrors):
         predict_credit_risk(df=corrupted_df, model_path=artifact_path)
+
+
+def test_evaluate_predictions_from_precomputed_scores() -> None:
+    """Métricas de produção são calculadas a partir de predições já existentes."""
+    from credit_risk.model import evaluate_predictions
+
+    metrics = evaluate_predictions(
+        y_true=pd.Series([0, 0, 1, 1]),
+        y_pred=pd.Series([0, 1, 1, 1]),
+        y_score=pd.Series([0.1, 0.6, 0.7, 0.9]),
+    )
+    assert metrics["roc_auc"] == 1.0
+    assert metrics["recall"] == 1.0
+    assert metrics["precision"] == 2 / 3
+
+    single_class = evaluate_predictions(pd.Series([0, 0]), pd.Series([0, 1]), pd.Series([0.2, 0.8]))
+    assert single_class["roc_auc"] == 0.5

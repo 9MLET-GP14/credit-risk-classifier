@@ -38,3 +38,15 @@ Com o choque simulado (`simulate_economic_shock`), o pipeline conclui o treino e
 Quando anomalias intencionais são injetadas (`build_corrupted_batch`), a auditoria calcula a taxa de rejeição (`6/4000` registros = `0,15%` do lote de produção) e a barreira estrita do Pandera bloqueia a inferência emitindo `ERROR` com todas as regras violadas. O bloco `finally` garante o registro do run com status `FAILED` e o envio do log de erro para o MLflow.
 
 ![Logs do cenário corrupted bloqueado pelo Pandera no MLflow](images/05_corrupted_logs.png)
+
+### 3.4 Concept Drift, Fairness e Infraestrutura no Log Centralizado
+A partir desta versão, o cenário `drift` também simula Concept Drift (`simulate_concept_drift`) e registra no mesmo log e no mesmo run do MLflow:
+
+```text
+WARNING | [concept] ROC-AUC referência=0.6224 -> produção=0.5052 (queda=0.1172) | Recall 0.5356 -> 0.3476 | ALERTA DE DEGRADAÇÃO
+WARNING | [concept] Drift do alvo real (TARGET): DETECTADO | teste=z | p=0.000000
+WARNING | [fairness] produção   | AGE_BAND             | disparate_impact=0.521 | gap_negação=0.405 | menos aprovado=18-25 | ALERTA
+INFO    | [infra] Memória do processo=355.8 MB | CPU do processo=13.58s | CPU host=45.3% | Memória host=71.6% | Alertas totais=14
+```
+
+Os relatórios `model_performance_report.html` e `fairness_report.html` são anexados na pasta `reports/` dos artefatos do run, ao lado de `drift_report.html`. As capturas de tela acima são de uma versão anterior e não mostram essas novas métricas (`production_roc_auc`, `roc_auc_drop`, `target_drift`, `fairness_di_*`, `process_memory_mb`, `total_alerts_count`). Para vê-las, execute `make pipeline-drift` e `make mlflow-ui`.

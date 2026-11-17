@@ -30,6 +30,8 @@ models/*
 reports/*
 !reports/.gitkeep
 !reports/drift_report.html
+!reports/model_performance_report.html
+!reports/fairness_report.html
 
 # MLflow
 mlruns/

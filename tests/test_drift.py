@@ -4,9 +4,15 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from credit_risk.contracts import validate_data
-from credit_risk.drift import generate_drift_report, simulate_economic_shock
+from credit_risk.drift import (
+    generate_drift_report,
+    generate_performance_report,
+    simulate_concept_drift,
+    simulate_economic_shock,
+)
 
 
 def _create_reference_sample(n_rows: int = 200) -> pd.DataFrame:
@@ -64,3 +70,38 @@ def test_generate_drift_report_creates_html_and_detects_drifted_features(tmp_pat
     assert summary["number_of_drifted_columns"] >= 2
     assert "AMT_INCOME_TOTAL" in summary["drifted_columns"]
     assert "AMT_CREDIT" in summary["drifted_columns"]
+
+
+def test_simulate_concept_drift_changes_labels_but_not_features() -> None:
+    """Concept Drift altera apenas P(TARGET|X): features idênticas, rótulos diferentes."""
+    ref_df = _create_reference_sample(n_rows=500)
+    shocked = simulate_economic_shock(ref_df, random_state=42, keep_target=True)
+    assert "TARGET" in shocked.columns
+
+    drifted = simulate_concept_drift(shocked, random_state=42)
+    feature_cols = [c for c in shocked.columns if c != "TARGET"]
+    pd.testing.assert_frame_equal(drifted[feature_cols], shocked[feature_cols])
+    assert (drifted["TARGET"] != shocked["TARGET"]).sum() > 0
+    assert drifted["TARGET"].isin([0, 1]).all()
+
+
+def test_simulate_concept_drift_requires_target() -> None:
+    ref_df = _create_reference_sample(n_rows=50).drop(columns=["TARGET"])
+    with pytest.raises(ValueError, match="Concept Drift requer rótulos"):
+        simulate_concept_drift(ref_df)
+
+
+def test_generate_performance_report_detects_target_drift(tmp_path: Path) -> None:
+    """Relatório de Concept Drift deve ser gerado e acusar mudança na taxa de inadimplência."""
+    rng = np.random.default_rng(0)
+    ref_df = pd.DataFrame(
+        {"TARGET": rng.choice([0, 1], 1000, p=[0.92, 0.08]), "RISK_SCORE": rng.random(1000)}
+    )
+    prod_df = pd.DataFrame(
+        {"TARGET": rng.choice([0, 1], 1000, p=[0.75, 0.25]), "RISK_SCORE": rng.random(1000)}
+    )
+    report_path = tmp_path / "performance.html"
+    summary = generate_performance_report(ref_df, prod_df, report_path=report_path)
+    assert report_path.exists()
+    assert summary["target_drift"] is True
+    assert summary["target_drift_score"] < 0.05

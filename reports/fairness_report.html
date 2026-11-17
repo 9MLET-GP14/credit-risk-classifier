@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Fairness</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:2rem auto;max-width:960px;color:#1f2933}
+table{border-collapse:collapse;width:100%;margin-bottom:1rem}
+th,td{border:1px solid #d9e2ec;padding:.4rem .6rem;text-align:right}
+th{background:#f0f4f8} td:first-child,th:first-child{text-align:left}
+.alert{background:#fde8e8;color:#9b1c1c;padding:.1rem .5rem;border-radius:4px}
+.ok{background:#def7ec;color:#03543f;padding:.1rem .5rem;border-radius:4px}
+</style></head><body>
+<h1>Relatório de Fairness — Decisões de Crédito</h1>
+<p>Grupos com menos de 30 registros são exibidos, mas não entram no cálculo
+das métricas agregadas. Os atributos de grupo são usados apenas para auditoria.</p>
+<section><h2>referência · AGE_BAND <span class='alert'>ALERTA</span></h2><p>Disparate impact: <b>0.365</b> (mínimo 0.8) · Gap de negação indevida: <b>53.29%</b> (máximo 10%) · Grupo menos aprovado: <b>18-25</b></p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Grupo</th>
+      <th>N</th>
+      <th>Taxa de aprovação</th>
+      <th>Inadimplência observada</th>
+      <th>Negação indevida (FPR)</th>
+      <th>Recall (TPR)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>18-25</td>
+      <td>221</td>
+      <td>30.77%</td>
+      <td>9.50%</td>
+      <td>69.00%</td>
+      <td>71.43%</td>
+    </tr>
+    <tr>
+      <td>26-35</td>
+      <td>1021</td>
+      <td>45.64%</td>
+      <td>12.05%</td>
+      <td>52.78%</td>
+      <td>65.85%</td>
+    </tr>
+    <tr>
+      <td>36-50</td>
+      <td>1492</td>
+      <td>59.58%</td>
+      <td>7.77%</td>
+      <td>39.03%</td>
+      <td>56.90%</td>
+    </tr>
+    <tr>
+      <td>51+</td>
+      <td>1266</td>
+      <td>84.20%</td>
+      <td>4.98%</td>
+      <td>15.71%</td>
+      <td>17.46%</td>
+    </tr>
+  </tbody>
+</table></section><section><h2>referência · NAME_EDUCATION_TYPE <span class='alert'>ALERTA</span></h2><p>Disparate impact: <b>0.593</b> (mínimo 0.8) · Gap de negação indevida: <b>35.19%</b> (máximo 10%) · Grupo menos aprovado: <b>Secondary / secondary special</b></p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Grupo</th>
+      <th>N</th>
+      <th>Taxa de aprovação</th>
+      <th>Inadimplência observada</th>
+      <th>Negação indevida (FPR)</th>
+      <th>Recall (TPR)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Academic degree</td>
+      <td>4</td>
+      <td>50.00%</td>
+      <td>0.00%</td>
+      <td>50.00%</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td>Higher education</td>
+      <td>1010</td>
+      <td>88.81%</td>
+      <td>6.53%</td>
+      <td>10.70%</td>
+      <td>18.18%</td>
+    </tr>
+    <tr>
+      <td>Incomplete higher</td>
+      <td>136</td>
+      <td>63.24%</td>
+      <td>8.82%</td>
+      <td>35.48%</td>
+      <td>50.00%</td>
+    </tr>
+    <tr>
+      <td>Lower secondary</td>
+      <td>57</td>
+      <td>59.65%</td>
+      <td>14.04%</td>
+      <td>36.73%</td>
+      <td>62.50%</td>
+    </tr>
+    <tr>
+      <td>Secondary / secondary special</td>
+      <td>2793</td>
+      <td>52.63%</td>
+      <td>8.49%</td>
+      <td>45.89%</td>
+      <td>63.29%</td>
+    </tr>
+  </tbody>
+</table></section><section><h2>referência · NAME_INCOME_TYPE <span class='alert'>ALERTA</span></h2><p>Disparate impact: <b>0.528</b> (mínimo 0.8) · Gap de negação indevida: <b>40.53%</b> (máximo 10%) · Grupo menos aprovado: <b>Working</b></p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Grupo</th>
+      <th>N</th>
+      <th>Taxa de aprovação</th>
+      <th>Inadimplência observada</th>
+      <th>Negação indevida (FPR)</th>
+      <th>Recall (TPR)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Commercial associate</td>
+      <td>964</td>
+      <td>66.39%</td>
+      <td>7.05%</td>
+      <td>32.48%</td>
+      <td>48.53%</td>
+    </tr>
+    <tr>
+      <td>Pensioner</td>
+      <td>715</td>
+      <td>89.65%</td>
+      <td>5.31%</td>
+      <td>10.49%</td>
+      <td>7.89%</td>
+    </tr>
+    <tr>
+      <td>State servant</td>
+      <td>308</td>
+      <td>82.79%</td>
+      <td>6.82%</td>
+      <td>17.07%</td>
+      <td>19.05%</td>
+    </tr>
+    <tr>
+      <td>Working</td>
+      <td>2013</td>
+      <td>47.34%</td>
+      <td>9.74%</td>
+      <td>51.02%</td>
+      <td>67.86%</td>
+    </tr>
+  </tbody>
+</table></section><section><h2>produção · AGE_BAND <span class='alert'>ALERTA</span></h2><p>Disparate impact: <b>0.521</b> (mínimo 0.8) · Gap de negação indevida: <b>40.54%</b> (máximo 10%) · Grupo menos aprovado: <b>18-25</b></p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Grupo</th>
+      <th>N</th>
+      <th>Taxa de aprovação</th>
+      <th>Inadimplência observada</th>
+      <th>Negação indevida (FPR)</th>
+      <th>Recall (TPR)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>18-25</td>
+      <td>603</td>
+      <td>42.95%</td>
+      <td>12.77%</td>
+      <td>57.98%</td>
+      <td>50.65%</td>
+    </tr>
+    <tr>
+      <td>26-35</td>
+      <td>1082</td>
+      <td>53.79%</td>
+      <td>13.68%</td>
+      <td>46.47%</td>
+      <td>44.59%</td>
+    </tr>
+    <tr>
+      <td>36-50</td>
+      <td>1407</td>
+      <td>69.15%</td>
+      <td>13.93%</td>
+      <td>31.21%</td>
+      <td>28.57%</td>
+    </tr>
+    <tr>
+      <td>51+</td>
+      <td>908</td>
+      <td>82.38%</td>
+      <td>10.35%</td>
+      <td>17.44%</td>
+      <td>19.15%</td>
+    </tr>
+  </tbody>
+</table></section><section><h2>produção · NAME_EDUCATION_TYPE <span class='alert'>ALERTA</span></h2><p>Disparate impact: <b>0.537</b> (mínimo 0.8) · Gap de negação indevida: <b>39.86%</b> (máximo 10%) · Grupo menos aprovado: <b>Lower secondary</b></p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Grupo</th>
+      <th>N</th>
+      <th>Taxa de aprovação</th>
+      <th>Inadimplência observada</th>
+      <th>Negação indevida (FPR)</th>
+      <th>Recall (TPR)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Academic degree</td>
+      <td>4</td>
+      <td>50.00%</td>
+      <td>0.00%</td>
+      <td>50.00%</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td>Higher education</td>
+      <td>1010</td>
+      <td>91.39%</td>
+      <td>16.44%</td>
+      <td>8.06%</td>
+      <td>11.45%</td>
+    </tr>
+    <tr>
+      <td>Incomplete higher</td>
+      <td>136</td>
+      <td>66.18%</td>
+      <td>10.29%</td>
+      <td>36.07%</td>
+      <td>14.29%</td>
+    </tr>
+    <tr>
+      <td>Lower secondary</td>
+      <td>57</td>
+      <td>49.12%</td>
+      <td>15.79%</td>
+      <td>47.92%</td>
+      <td>66.67%</td>
+    </tr>
+    <tr>
+      <td>Secondary / secondary special</td>
+      <td>2793</td>
+      <td>54.39%</td>
+      <td>11.67%</td>
+      <td>45.48%</td>
+      <td>46.63%</td>
+    </tr>
+  </tbody>
+</table></section><section><h2>produção · NAME_INCOME_TYPE <span class='alert'>ALERTA</span></h2><p>Disparate impact: <b>0.634</b> (mínimo 0.8) · Gap de negação indevida: <b>32.26%</b> (máximo 10%) · Grupo menos aprovado: <b>Working</b></p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Grupo</th>
+      <th>N</th>
+      <th>Taxa de aprovação</th>
+      <th>Inadimplência observada</th>
+      <th>Negação indevida (FPR)</th>
+      <th>Recall (TPR)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Commercial associate</td>
+      <td>1438</td>
+      <td>67.87%</td>
+      <td>4.73%</td>
+      <td>31.24%</td>
+      <td>50.00%</td>
+    </tr>
+    <tr>
+      <td>Pensioner</td>
+      <td>529</td>
+      <td>78.26%</td>
+      <td>9.45%</td>
+      <td>21.71%</td>
+      <td>22.00%</td>
+    </tr>
+    <tr>
+      <td>State servant</td>
+      <td>228</td>
+      <td>82.02%</td>
+      <td>25.44%</td>
+      <td>18.82%</td>
+      <td>15.52%</td>
+    </tr>
+    <tr>
+      <td>Unemployed</td>
+      <td>287</td>
+      <td>68.29%</td>
+      <td>5.92%</td>
+      <td>31.11%</td>
+      <td>41.18%</td>
+    </tr>
+    <tr>
+      <td>Working</td>
+      <td>1518</td>
+      <td>51.98%</td>
+      <td>21.21%</td>
+      <td>51.09%</td>
+      <td>36.65%</td>
+    </tr>
+  </tbody>
+</table></section>
+</body></html>

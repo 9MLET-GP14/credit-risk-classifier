@@ -1,4 +1,4 @@
-"""Pipeline unificado ponta a ponta: Ingestão -> Pandera -> Treino -> Drift -> MLflow."""
+"""Pipeline ponta a ponta: Pandera -> Treino -> Data/Concept Drift -> Fairness -> MLflow."""
 
 import argparse
 import sys
@@ -16,9 +16,16 @@ from credit_risk.data import (
     preprocess_reference_data,
     split_and_save_reference,
 )
-from credit_risk.drift import generate_drift_report, simulate_economic_shock
+from credit_risk.drift import (
+    generate_drift_report,
+    generate_performance_report,
+    simulate_concept_drift,
+    simulate_economic_shock,
+)
+from credit_risk.fairness import count_fairness_alerts, run_fairness_audit
 from credit_risk.model import (
     evaluate_model,
+    evaluate_predictions,
     predict_credit_risk,
     save_model_artifact,
     train_baseline_model,
@@ -26,9 +33,13 @@ from credit_risk.model import (
 from credit_risk.observability import (
     PipelineHealthMetrics,
     audit_contract_health,
+    collect_infrastructure_metrics,
     get_logger,
+    log_concept_drift_details,
     log_drift_details,
+    log_fairness_details,
     log_pipeline_run_to_mlflow,
+    prime_cpu_monitor,
     validate_with_observability,
 )
 
@@ -49,8 +60,9 @@ def parse_args() -> argparse.Namespace:
         choices=["clean", "drift", "corrupted"],
         default="drift",
         help=(
-            "Cenário de produção: 'clean' (sem drift), 'drift' (choque econômico, padrão) "
-            "ou 'corrupted' (lote com anomalias para testar bloqueio do Pandera)."
+            "Cenário de produção: 'clean' (sem drift), 'drift' (choque econômico com Data "
+            "Drift + Concept Drift, padrão) ou 'corrupted' (lote com anomalias para testar "
+            "bloqueio do Pandera)."
         ),
     )
     parser.add_argument(
@@ -70,6 +82,7 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_name = args.run_name or f"credit-risk-{args.scenario}-{timestamp}"
 
+    prime_cpu_monitor()
     pipeline_start = time.perf_counter()
     ingestion_latency = 0.0
     validation_latency = 0.0
@@ -89,6 +102,12 @@ def main() -> None:
     }
     ref_default_rate = 0.0
     prod_default_rate = 0.0
+    prod_metrics: dict[str, float] = {"roc_auc": 0.0, "recall": 0.0, "precision": 0.0, "f1": 0.0}
+    ref_observed_default_rate = 0.0
+    prod_observed_default_rate = 0.0
+    target_summary: dict[str, object] = {"target_drift": False}
+    performance_alert = False
+    fairness_results: dict[str, dict[str, dict]] = {}
     pipeline_status = 1
 
     params = {
@@ -190,13 +209,24 @@ def main() -> None:
             target_column=settings.target_column,
         )
         ref_default_rate = float(ref_with_preds["TARGET_PRED"].mean())
+        ref_with_preds[settings.target_column] = test_df[settings.target_column].to_numpy()
 
+        # Os lotes 'clean' e 'drift' carregam o TARGET observado com atraso (ground truth),
+        # usado apenas para medir Concept Drift; a inferência nunca recebe o alvo.
         if args.scenario == "clean":
             logger.info("[produção] Cenário 'clean': utilizando lote de produção sem choque.")
-            prod_df = test_df.drop(columns=[settings.target_column], errors="ignore").copy()
+            prod_df = test_df.copy()
         elif args.scenario == "drift":
-            logger.info("[produção] Cenário 'drift': simulando choque macroeconômico.")
-            prod_df = simulate_economic_shock(test_df, random_state=settings.random_state)
+            logger.info(
+                "[produção] Cenário 'drift': simulando choque macroeconômico (Data Drift) "
+                "e mudança na relação features -> inadimplência (Concept Drift)."
+            )
+            prod_df = simulate_economic_shock(
+                test_df, random_state=settings.random_state, keep_target=True
+            )
+            prod_df = simulate_concept_drift(
+                prod_df, target_column=settings.target_column, random_state=settings.random_state
+            )
         else:
             logger.warning("[produção] Cenário 'corrupted': injetando anomalias no lote.")
             prod_df = build_corrupted_batch(test_df)
@@ -223,6 +253,8 @@ def main() -> None:
             target_column=settings.target_column,
         )
         prod_default_rate = float(prod_with_preds["TARGET_PRED"].mean())
+        if settings.target_column in prod_df.columns:
+            prod_with_preds[settings.target_column] = prod_df[settings.target_column].to_numpy()
         settings.production_shock_path.parent.mkdir(parents=True, exist_ok=True)
         prod_with_preds.to_parquet(settings.production_shock_path, index=False)
 
@@ -239,9 +271,46 @@ def main() -> None:
             id_column=settings.id_column,
             target_column=settings.target_column,
         )
-        drift_latency = round(time.perf_counter() - t0, 4)
         log_drift_details(drift_summary, logger=logger)
-        logger.info("[drift] Análise concluída em %.4fs.", drift_latency)
+
+        # 6. Concept Drift: performance real em produção (rótulos com atraso)
+        target = settings.target_column
+        if target in prod_with_preds.columns:
+            ref_metrics = evaluate_predictions(
+                ref_with_preds[target], ref_with_preds["TARGET_PRED"], ref_with_preds["RISK_SCORE"]
+            )
+            prod_metrics = evaluate_predictions(
+                prod_with_preds[target],
+                prod_with_preds["TARGET_PRED"],
+                prod_with_preds["RISK_SCORE"],
+            )
+            ref_observed_default_rate = float(ref_with_preds[target].mean())
+            prod_observed_default_rate = float(prod_with_preds[target].mean())
+            target_summary = generate_performance_report(
+                reference_df=ref_with_preds,
+                production_df=prod_with_preds,
+                report_path=settings.performance_report_path,
+                target_column=target,
+            )
+            performance_alert = log_concept_drift_details(
+                ref_metrics,
+                prod_metrics,
+                target_summary,
+                logger=logger,
+                min_roc_auc=settings.min_production_roc_auc,
+                max_auc_drop=settings.max_roc_auc_drop,
+            )
+
+        # 7. Auditoria de vieses (fairness) por faixa etária, escolaridade e tipo de renda
+        fairness_results = run_fairness_audit(
+            datasets={"referência": ref_with_preds, "produção": prod_with_preds},
+            group_columns=settings.fairness_group_columns,
+            report_path=settings.fairness_report_path,
+            target_column=target,
+        )
+        log_fairness_details(fairness_results, logger=logger)
+        drift_latency = round(time.perf_counter() - t0, 4)
+        logger.info("[drift] Análise de drift, concept drift e fairness em %.4fs.", drift_latency)
 
     except pa.errors.SchemaErrors:
         pipeline_status = 0
@@ -252,6 +321,31 @@ def main() -> None:
     finally:
         total_latency = round(time.perf_counter() - pipeline_start, 4)
         status_label = "SUCCESS" if pipeline_status == 1 else "FAILED"
+        infra = collect_infrastructure_metrics()
+        fairness_alerts = count_fairness_alerts(fairness_results)
+
+        def _di(dataset: str, column: str) -> float:
+            return float(
+                fairness_results.get(dataset, {}).get(column, {}).get("disparate_impact", 1.0)
+            )
+
+        target_drift = bool(target_summary.get("target_drift", False))
+        total_alerts = (
+            int(drift_summary["number_of_drifted_columns"])
+            + int(target_drift)
+            + int(performance_alert)
+            + fairness_alerts
+            + int(rejected_records > 0)
+        )
+        logger.info(
+            "[infra] Memória do processo=%.1f MB | CPU do processo=%.2fs | CPU host=%.1f%% | "
+            "Memória host=%.1f%% | Alertas totais=%d",
+            infra["process_memory_mb"],
+            infra["process_cpu_seconds"],
+            infra["system_cpu_percent"],
+            infra["system_memory_percent"],
+            total_alerts,
+        )
         logger.info(
             "[resumo] Status=%s | Latência total=%.4fs | Registros=%d | Rejeitados=%d (%.2f%%)",
             status_label,
@@ -282,6 +376,24 @@ def main() -> None:
             validation_latency_seconds=validation_latency,
             training_latency_seconds=training_latency,
             drift_latency_seconds=drift_latency,
+            production_roc_auc=float(prod_metrics["roc_auc"]),
+            production_recall=float(prod_metrics["recall"]),
+            production_precision=float(prod_metrics["precision"]),
+            production_f1=float(prod_metrics["f1"]),
+            roc_auc_drop=round(float(eval_metrics["roc_auc"]) - float(prod_metrics["roc_auc"]), 6)
+            if prod_metrics["roc_auc"]
+            else 0.0,
+            reference_observed_default_rate=round(ref_observed_default_rate, 6),
+            production_observed_default_rate=round(prod_observed_default_rate, 6),
+            target_drift=target_drift,
+            performance_alert=performance_alert,
+            fairness_di_age_reference=_di("referência", "AGE_BAND"),
+            fairness_di_age_production=_di("produção", "AGE_BAND"),
+            fairness_di_education_production=_di("produção", "NAME_EDUCATION_TYPE"),
+            fairness_di_income_type_production=_di("produção", "NAME_INCOME_TYPE"),
+            fairness_alerts_count=fairness_alerts,
+            total_alerts_count=total_alerts,
+            **infra,
         )
 
         run_id = log_pipeline_run_to_mlflow(
@@ -293,6 +405,11 @@ def main() -> None:
             model_path=settings.baseline_model_path if pipeline_status == 1 else None,
             drift_report_path=settings.drift_report_path if pipeline_status == 1 else None,
             log_file_path=settings.pipeline_log_path,
+            extra_report_paths=(
+                [settings.performance_report_path, settings.fairness_report_path]
+                if pipeline_status == 1
+                else None
+            ),
             tags={"status": status_label, "scenario": args.scenario},
             logger=logger,
         )
