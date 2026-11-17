@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Servidor web da interface do MLflow (http://localhost:5000)
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit-risk-mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/app/mlruns
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri /app/mlruns
+
+  # Servidor de relatórios e painel visual (http://localhost:8080)
+  reports:
+    image: nginx:alpine
+    container_name: credit-risk-reports
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./reports:/usr/share/nginx/html:ro
+
+  # Execução dos comandos do pipeline e scripts no contêiner
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit-risk-pipeline
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./mlruns:/app/mlruns
+    environment:
+      - CREDIT_RISK_DATA_DIR=/app/data
+      - CREDIT_RISK_MODELS_DIR=/app/models
+      - CREDIT_RISK_REPORTS_DIR=/app/reports
+      - CREDIT_RISK_LOGS_DIR=/app/logs
+      - CREDIT_RISK_MLFLOW_TRACKING_URI=file:///app/mlruns
+
+  # Servidor de métricas em tempo real para Prometheus (http://localhost:9090)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: credit-risk-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Dashboard interativo do Grafana (http://localhost:3000)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: credit-risk-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus

@@ -79,14 +79,41 @@ pipeline-corrupted:
 mlflow-ui:
 	$(RUN) mlflow ui
 
+reports-ui:
+	python3 -m http.server 8080 --directory reports
+
+docker-build:
+	docker compose build
+
+docker-up:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+docker-pipeline:
+	docker compose run --rm pipeline python scripts/run_pipeline.py --scenario $(SCENARIO)
+
+docker-pipeline-clean:
+	docker compose run --rm pipeline python scripts/run_pipeline.py --scenario clean
+
+docker-pipeline-drift:
+	docker compose run --rm pipeline python scripts/run_pipeline.py --scenario drift
+
+docker-pipeline-corrupted:
+	-docker compose run --rm pipeline python scripts/run_pipeline.py --scenario corrupted
+
+docker-validate-corrupted:
+	docker compose run --rm pipeline python scripts/validate_contracts.py --simulate-corruption
+
 prometheus-metrics:
 	$(RUN) python scripts/serve_metrics.py --port 8000
 
 monitoring-up:
-	docker compose -f monitoring/docker-compose.yml up -d
+	docker compose up -d prometheus grafana
 
 monitoring-down:
-	docker compose -f monitoring/docker-compose.yml down
+	docker compose stop prometheus grafana && docker compose rm -f prometheus grafana
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov

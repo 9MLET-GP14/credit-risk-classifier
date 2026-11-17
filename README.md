@@ -194,7 +194,10 @@ make monitoring-up     # Prometheus na porta 9090 e Grafana na porta 3000 (admin
 make monitoring-down   # Para os containers de monitoramento
 ```
 
-### 8. Validação do Código (Lint e Testes)
+### 8. Execução via Docker (Opcional)
+O projeto também conta com suporte completo a contêineres Docker (`Dockerfile` e `docker-compose.yml`) para quem preferir executar as interfaces web (MLflow na porta 5000, painel de relatórios na porta 8080 ou a stack Prometheus/Grafana) e os pipelines de forma isolada. Os targets correspondentes estão documentados diretamente no [Makefile](Makefile) (`make docker-build`, `make docker-up`, `make docker-down`, etc.).
+
+### 9. Validação do Código (Lint e Testes)
 ```bash
 # Executar verificação de formatação e lint com Ruff
 make lint
