@@ -6,7 +6,7 @@ O foco deste projeto é a construção de uma **camada de sustentação e confia
 
 ## 🎥 Vídeo de Apresentação (método STAR, ≤ 5 min)
 
-**Link:** _[ADICIONAR LINK DO VÍDEO AQUI]_
+**Link:** https://drive.google.com/drive/folders/1gV0i1hOxrZ49ekvuWRRLzS6FLpSRSj2t?usp=drive_link
 
 | Etapa STAR | Conteúdo demonstrado |
 | :--- | :--- |
